@@ -29,16 +29,18 @@ function getZoneDynamic(fraud, cti, ite, etc, conditions = []) {
     const eMin = Number(cond.etc_min || 0);
     const eMax = Number(cond.etc_max || 999999);
 
-    const fraudOk = fraud >= fMin && fraud <= fMax;
-    const ctiOk = cti >= cMin && cti <= cMax;
-    const iteOk = ite >= iMin && ite <= iMax;
-    const etcOk = etc >= eMin && etc <= eMax;
+    // ✅ Apply ignore flags
+    const fraudOk = cond.fraud_ignore ? true : fraud >= fMin && fraud <= fMax;
+    const ctiOk = cond.cti_ignore ? true : cti >= cMin && cti <= cMax;
+    const iteOk = cond.ite_ignore ? true : ite >= iMin && ite <= iMax;
+    const etcOk = cond.etc_ignore ? true : etc >= eMin && etc <= eMax;
 
     if (fraudOk && ctiOk && iteOk && etcOk) {
       return cond.zone_color;
     }
   }
-  return "Red";
+
+  return "Red"; // default fallback
 }
 
 module.exports = {
@@ -46,5 +48,5 @@ module.exports = {
   calculateITE,
   calculateETC,
   calculateFraudScore,
-  getZoneDynamic
+  getZoneDynamic,
 };

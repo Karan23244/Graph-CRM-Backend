@@ -95,9 +95,17 @@ app.post(
       // insert/update each default row into campaign
       for (const d of defaults) {
         await pool.query(
-          `INSERT INTO campaign_zone_conditions (campaign_name, zone_color, fraud_min, fraud_max, cti_min, cti_max, ite_min, ite_max, etc_min, etc_max)
-         VALUES (?,?,?,?,?,?,?,?,?,?)
-         ON DUPLICATE KEY UPDATE fraud_min=VALUES(fraud_min), fraud_max=VALUES(fraud_max), cti_min=VALUES(cti_min), cti_max=VALUES(cti_max), ite_min=VALUES(ite_min), ite_max=VALUES(ite_max), etc_min=VALUES(etc_min), etc_max=VALUES(etc_max)`,
+          `INSERT INTO campaign_zone_conditions 
+   (campaign_name, zone_color, fraud_min, fraud_max, cti_min, cti_max, ite_min, ite_max, etc_min, etc_max,
+    fraud_ignore, cti_ignore, ite_ignore, etc_ignore)
+   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+   ON DUPLICATE KEY UPDATE 
+    fraud_min=VALUES(fraud_min), fraud_max=VALUES(fraud_max), 
+    cti_min=VALUES(cti_min), cti_max=VALUES(cti_max), 
+    ite_min=VALUES(ite_min), ite_max=VALUES(ite_max),
+    etc_min=VALUES(etc_min), etc_max=VALUES(etc_max),
+    fraud_ignore=VALUES(fraud_ignore), cti_ignore=VALUES(cti_ignore),
+    ite_ignore=VALUES(ite_ignore), etc_ignore=VALUES(etc_ignore)`,
           [
             campaign,
             d.zone_color,
@@ -109,6 +117,10 @@ app.post(
             d.ite_max,
             d.etc_min,
             d.etc_max,
+            d.fraud_ignore,
+            d.cti_ignore,
+            d.ite_ignore,
+            d.etc_ignore,
           ]
         );
       }
@@ -120,6 +132,32 @@ app.post(
     }
   }
 );
+
+// Add a dedicated endpoint for global ignores
+app.post("/api/zone-conditions/:campaign/set-ignores", async (req, res) => {
+  const campaign = req.params.campaign;
+  const {
+    fraud_ignore = 0,
+    cti_ignore = 0,
+    ite_ignore = 0,
+    etc_ignore = 0,
+  } = req.body;
+
+  try {
+    // ✅ update ALL rows of this campaign with same ignore flags
+    await pool.query(
+      `UPDATE campaign_zone_conditions
+       SET fraud_ignore=?, cti_ignore=?, ite_ignore=?, etc_ignore=?
+       WHERE campaign_name=?`,
+      [fraud_ignore, cti_ignore, ite_ignore, etc_ignore, campaign]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "DB error" });
+  }
+});
 
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
