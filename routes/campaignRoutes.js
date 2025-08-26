@@ -173,11 +173,12 @@ router.get("/pids-stable", async (req, res) => {
       return res.json([]);
     }
 
-    const pidList = eligiblePids.map(row => row.pid);
+    const pidList = eligiblePids.map((row) => row.pid);
     console.log(`Eligible PIDs (>=5 campaigns):`, pidList);
 
     // 2️⃣ Fetch only latest record per (pid, campaign) for those eligible PIDs
-    const [metrics] = await pool.query(`
+    const [metrics] = await pool.query(
+      `
       SELECT cm.*
       FROM campaign_metrics cm
       INNER JOIN (
@@ -191,7 +192,9 @@ router.get("/pids-stable", async (req, res) => {
       ON cm.pid = latest_rec.pid
       AND cm.campaign_name = latest_rec.campaign_name
       AND cm.created_at = latest_rec.latest
-    `, [pidList]);
+    `,
+      [pidList]
+    );
 
     console.log(`Fetched ${metrics.length} latest records for eligible PIDs`);
 
@@ -224,7 +227,7 @@ router.get("/pids-stable", async (req, res) => {
           total: 0,
           yellowOrGreen: 0,
           campaigns: new Set(),
-          campaignDetails: []
+          campaignDetails: [],
         };
       }
 
@@ -237,7 +240,7 @@ router.get("/pids-stable", async (req, res) => {
 
       pidStats[m.pid].campaignDetails.push({
         campaign: m.campaign_name,
-        zone
+        zone,
       });
     }
 
@@ -246,23 +249,66 @@ router.get("/pids-stable", async (req, res) => {
       .filter(([pid, stats]) => {
         const yellowGreenPct = (stats.yellowOrGreen / stats.total) * 100;
         console.log(
-          `PID: ${pid} | Campaigns: ${stats.campaigns.size} | % Yellow/Green: ${yellowGreenPct.toFixed(
-            2
-          )}`
+          `PID: ${pid} | Campaigns: ${
+            stats.campaigns.size
+          } | % Yellow/Green: ${yellowGreenPct.toFixed(2)}`
         );
         return yellowGreenPct > 60;
       })
       .map(([pid, stats]) => ({
         pid,
-        campaigns: stats.campaignDetails
+        campaigns: stats.campaignDetails,
       }));
 
-    console.log(`Final Stable PIDs:`, stablePids.map(a => a.pid));
+    console.log(
+      `Final Stable PIDs:`,
+      stablePids.map((a) => a.pid)
+    );
 
     res.json(stablePids);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "DB error" });
+  }
+});
+router.delete("/campaigndelete", async (req, res) => {
+  const { campaign_name, date_range } = req.body;
+
+  if (!campaign_name || !date_range) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Missing campaign_name or date_range" });
+  }
+
+  try {
+    // 1️⃣ Delete related events first
+    await pool.query(
+      `DELETE ce
+       FROM campaign_event_metrics ce
+       JOIN campaign_metrics cm ON ce.campaign_id = cm.id
+       WHERE cm.campaign_name = ? AND cm.date_range = ?`,
+      [campaign_name, date_range]
+    );
+
+    // 2️⃣ Then delete campaign records
+    const [result] = await pool.query(
+      "DELETE FROM campaign_metrics WHERE campaign_name = ? AND date_range = ?",
+      [campaign_name, date_range]
+    );
+
+    if (result.affectedRows === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "No records found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Campaign + related events deleted successfully",
+    });
+  } catch (error) {
+    console.error("Error deleting campaign:", error);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 });
 
