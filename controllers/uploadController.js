@@ -25,11 +25,6 @@ function parseXlsx(filePath) {
   const wb = XLSX.readFile(filePath, { cellDates: true });
   const sheet = wb.SheetNames[wb.SheetNames.length - 1];
   const raw = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { defval: "" });
-
-  if (raw.length > 0) {
-    console.log("📄 Columns:", Object.keys(raw[0]));
-  }
-
   return raw.map(normalizeRow);
 }
 
@@ -37,8 +32,6 @@ const handleUpload = async (req, res) => {
   try {
     const { campaignName, os, geo, dateRange } = req.body;
     const uploaded = req.files?.files || [];
-    console.log(os, geo, dateRange, campaignName);
-    console.log(`📂 Files uploaded: ${uploaded}`);
     if (!campaignName || uploaded.length === 0) {
       return res.status(400).json({ msg: "Missing fields or files" });
     }
@@ -49,8 +42,6 @@ const handleUpload = async (req, res) => {
     }
 
     const demoData = parseXlsx(demoFile.path);
-    console.log(demoData);
-    console.log(`📊 Total Rows in data: ${demoData.length}`);
 
     const demoIdentifiers = demoData
       .filter((r) => r.pid)
@@ -60,11 +51,6 @@ const handleUpload = async (req, res) => {
         const pubam = String(r.pubam || "").trim();
         const pause = r.pause; // ✅ Added
         const nocrm = r.crmnumber || r.crm || 0;
-        console.log(
-          `🔹 Row ${
-            i + 1
-          }: PID="${pid}", Pub ID="${pubid}", Pub Am="${pubam}", CRM="${nocrm}", Pause="${pause}"`
-        );
         return { pid, pubid, pubam, pause, nocrm };
       });
 
@@ -96,13 +82,6 @@ const handleUpload = async (req, res) => {
       const metricName = FILE_MAP[key];
       const rows = parseXlsx(file.path);
       parsedFiles[metricName] = rows;
-
-      console.log(
-        `✅ Matched: ${file.originalname} ➝ ${metricName}, Rows: ${rows.length}`
-      );
-      if (!rows.length) {
-        console.log(`⚠️ File ${file.originalname} has no data.`);
-      }
     }
 
     const missingFiles = Object.keys(FILE_MAP).filter(
@@ -222,9 +201,6 @@ const handleUpload = async (req, res) => {
         const rows = parsedFiles[eventFileKey] || [];
 
         if (!rows.length) {
-          if (eventFileKey === "pe") {
-            console.log(`❌ No rows found for event type: ${eventFileKey}`);
-          }
           continue;
         }
 
@@ -235,12 +211,6 @@ const handleUpload = async (req, res) => {
           /event[_\s]?name/i.test(c)
         );
 
-        if (eventFileKey === "pe") {
-          console.log(`🔍 Processing event type: ${eventFileKey}`);
-          console.log(
-            `📌 mediaSourceKey: ${mediaSourceKey}, eventNameKey: ${eventNameKey}`
-          );
-        }
 
         const eventCounts = {};
 
@@ -256,14 +226,6 @@ const handleUpload = async (req, res) => {
               .toLowerCase();
             if (event) {
               eventCounts[event] = (eventCounts[event] || 0) + 1;
-
-              if (eventFileKey === "pe") {
-                console.log(
-                  `✅ [${eventFileKey}] Row ${
-                    i + 1
-                  }: Found event "${event}" -> count: ${eventCounts[event]}`
-                );
-              }
             }
           } else {
             for (const [key, value] of Object.entries(row)) {
@@ -275,16 +237,6 @@ const handleUpload = async (req, res) => {
                 if (event) {
                   eventCounts[event] =
                     (eventCounts[event] || 0) + Number(value);
-
-                  if (eventFileKey === "pe") {
-                    console.log(
-                      ` ✅ [${eventFileKey}] Row ${
-                        i + 1
-                      }: Inferred event "${event}" -> count: ${
-                        eventCounts[event]
-                      }`
-                    );
-                  }
                 }
               }
             }
@@ -297,15 +249,8 @@ const handleUpload = async (req, res) => {
     ON DUPLICATE KEY UPDATE count = VALUES(count), event_type = VALUES(event_type)`;
           const values = [campaignId, pid, event, count, eventFileKey];
 
-          if (eventFileKey === "pe") {
-            console.log("📝 Trying to insert:", { values });
-          }
-
           try {
             const [result] = await pool.query(eventInsert, values);
-            if (eventFileKey === "pe") {
-              console.log("✅ Insert result:", result);
-            }
           } catch (err) {
             console.error(
               `❌ MySQL insert failed for event_type "${eventFileKey}" event "${event}":`,
@@ -315,9 +260,7 @@ const handleUpload = async (req, res) => {
         }
 
         if (Object.keys(eventCounts).length === 0 && eventFileKey === "pe") {
-          console.log(
-            `⚠️ No matching events found for PID "${pid}" in file: ${eventFileKey}`
-          );
+
         }
       }
     }
@@ -342,3 +285,4 @@ const handleUpload = async (req, res) => {
 };
 
 module.exports = { handleUpload };
+

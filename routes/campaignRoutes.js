@@ -273,7 +273,7 @@ router.get("/pids-stable", async (req, res) => {
 });
 router.delete("/campaigndelete", async (req, res) => {
   const { campaign_name, date_range } = req.body;
-
+  console.log("Delete request for:", campaign_name, date_range);
   if (!campaign_name || !date_range) {
     return res
       .status(400)

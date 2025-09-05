@@ -8,8 +8,8 @@ const pool = require("./config/db");
 dotenv.config();
 const app = express();
 
-app.use(cors());
-app.use(express.json());
+// app.use(cors());
+// app.use(express.json());
 
 //  ^|^e CORS FIRST
 
@@ -167,5 +167,5 @@ app.post("/api/zone-conditions/:campaign/set-ignores", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 2001;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

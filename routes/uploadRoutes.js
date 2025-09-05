@@ -10,7 +10,14 @@ const storage = multer.diskStorage({
     cb(null, Date.now() + "-" + file.originalname.replace(/\s+/g, "_"));
   },
 });
-const upload = multer({ storage });
+
+const upload = multer({
+  storage,
+  limits: {
+    fileSize: 1024 * 1024 * 500, // 500 MB per file
+    files: 20, // allow multiple files
+  },
+});
 
 router.post(
   "/metrics",
