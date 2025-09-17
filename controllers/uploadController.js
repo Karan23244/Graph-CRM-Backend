@@ -49,8 +49,8 @@ const handleUpload = async (req, res) => {
         const pid = String(r.pid || "").trim();
         const pubid = String(r.pubid || "").trim();
         const pubam = String(r.pubam || "").trim();
-        const pause = r.pause; // ✅ Added
-        const nocrm = r.crmnumber || r.crm || 0;
+        const pause = String(r.pause || "").trim(); // ✅ Added
+        const nocrm = String(r.nocrm || "").trim(); // ✅ Added
         return { pid, pubid, pubam, pause, nocrm };
       });
 
@@ -136,7 +136,7 @@ const handleUpload = async (req, res) => {
       });
     }
 
-    for (const { pid, pubid, pubam, pause,nocrm } of demoIdentifiers) {
+    for (const { pid, pubid, pubam, pause, nocrm } of demoIdentifiers) {
       const pidLower = pid.toLowerCase();
 
       const metrics = {
@@ -211,7 +211,6 @@ const handleUpload = async (req, res) => {
           /event[_\s]?name/i.test(c)
         );
 
-
         const eventCounts = {};
 
         rows.forEach((row, i) => {
@@ -260,7 +259,6 @@ const handleUpload = async (req, res) => {
         }
 
         if (Object.keys(eventCounts).length === 0 && eventFileKey === "pe") {
-
         }
       }
     }
@@ -285,4 +283,3 @@ const handleUpload = async (req, res) => {
 };
 
 module.exports = { handleUpload };
-
