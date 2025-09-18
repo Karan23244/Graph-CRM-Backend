@@ -271,13 +271,55 @@ router.get("/pids-stable", async (req, res) => {
     res.status(500).json({ error: "DB error" });
   }
 });
+// router.delete("/campaigndelete", async (req, res) => {
+//   const { campaign_name, date_range } = req.body;
+//   console.log("Delete request for:", campaign_name, date_range);
+//   if (!campaign_name || !date_range) {
+//     return res
+//       .status(400)
+//       .json({ success: false, message: "Missing campaign_name or date_range" });
+//   }
+
+//   try {
+//     // 1️⃣ Delete related events first
+//     await pool.query(
+//       `DELETE ce
+//        FROM campaign_event_metrics ce
+//        JOIN campaign_metrics cm ON ce.campaign_id = cm.id
+//        WHERE cm.campaign_name = ? AND cm.date_range = ?`,
+//       [campaign_name, date_range]
+//     );
+
+//     // 2️⃣ Then delete campaign records
+//     const [result] = await pool.query(
+//       "DELETE FROM campaign_metrics WHERE campaign_name = ? AND date_range = ?",
+//       [campaign_name, date_range]
+//     );
+
+//     if (result.affectedRows === 0) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "No records found" });
+//     }
+
+//     res.json({
+//       success: true,
+//       message: "Campaign + related events deleted successfully",
+//     });
+//   } catch (error) {
+//     console.error("Error deleting campaign:", error);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// });
+
 router.delete("/campaigndelete", async (req, res) => {
-  const { campaign_name, date_range } = req.body;
-  console.log("Delete request for:", campaign_name, date_range);
-  if (!campaign_name || !date_range) {
+  const { campaign_name, start_date, end_date } = req.body;
+  console.log("Delete request for:", campaign_name, start_date, end_date);
+
+  if (!campaign_name || !start_date || !end_date) {
     return res
       .status(400)
-      .json({ success: false, message: "Missing campaign_name or date_range" });
+      .json({ success: false, message: "Missing campaign_name or date range" });
   }
 
   try {
@@ -286,20 +328,23 @@ router.delete("/campaigndelete", async (req, res) => {
       `DELETE ce
        FROM campaign_event_metrics ce
        JOIN campaign_metrics cm ON ce.campaign_id = cm.id
-       WHERE cm.campaign_name = ? AND cm.date_range = ?`,
-      [campaign_name, date_range]
+       WHERE cm.campaign_name = ? 
+       AND cm.metrics_date BETWEEN ? AND ?`,
+      [campaign_name, start_date, end_date]
     );
 
     // 2️⃣ Then delete campaign records
     const [result] = await pool.query(
-      "DELETE FROM campaign_metrics WHERE campaign_name = ? AND date_range = ?",
-      [campaign_name, date_range]
+      `DELETE FROM campaign_metrics 
+       WHERE campaign_name = ? 
+       AND metrics_date BETWEEN ? AND ?`,
+      [campaign_name, start_date, end_date]
     );
 
     if (result.affectedRows === 0) {
       return res
         .status(404)
-        .json({ success: false, message: "No records found" });
+        .json({ success: false, message: "No records found in given range" });
     }
 
     res.json({
