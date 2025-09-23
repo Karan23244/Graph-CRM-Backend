@@ -545,6 +545,50 @@ router.get("/pids-stable", async (req, res) => {
 //   }
 // });
 
+// router.delete("/campaigndelete", async (req, res) => {
+//   const { campaign_name, start_date, end_date } = req.body;
+//   console.log("Delete request for:", campaign_name, start_date, end_date);
+
+//   if (!campaign_name || !start_date || !end_date) {
+//     return res
+//       .status(400)
+//       .json({ success: false, message: "Missing campaign_name or date range" });
+//   }
+
+//   try {
+//     // 1️⃣ Delete related events first
+//     await pool.query(
+//       `DELETE ce
+//        FROM campaign_event_metrics ce
+//        JOIN campaign_metrics cm ON ce.campaign_id = cm.id
+//        WHERE cm.campaign_name = ?
+//        AND cm.metrics_date BETWEEN ? AND ?`,
+//       [campaign_name, start_date, end_date]
+//     );
+
+//     // 2️⃣ Then delete campaign records
+//     const [result] = await pool.query(
+//       `DELETE FROM campaign_metrics
+//        WHERE campaign_name = ?
+//        AND metrics_date BETWEEN ? AND ?`,
+//       [campaign_name, start_date, end_date]
+//     );
+
+//     if (result.affectedRows === 0) {
+//       return res
+//         .status(404)
+//         .json({ success: false, message: "No records found in given range" });
+//     }
+
+//     res.json({
+//       success: true,
+//       message: "Campaign + related events deleted successfully",
+//     });
+//   } catch (error) {
+//     console.error("Error deleting campaign:", error);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// });
 router.delete("/campaigndelete", async (req, res) => {
   const { campaign_name, start_date, end_date } = req.body;
   console.log("Delete request for:", campaign_name, start_date, end_date);
@@ -562,7 +606,8 @@ router.delete("/campaigndelete", async (req, res) => {
        FROM campaign_event_metrics ce
        JOIN campaign_metrics cm ON ce.campaign_id = cm.id
        WHERE cm.campaign_name = ? 
-       AND cm.metrics_date BETWEEN ? AND ?`,
+       AND STR_TO_DATE(SUBSTRING_INDEX(cm.metrics_date, ' ', 1), '%Y-%m-%d') 
+           BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')`,
       [campaign_name, start_date, end_date]
     );
 
@@ -570,7 +615,8 @@ router.delete("/campaigndelete", async (req, res) => {
     const [result] = await pool.query(
       `DELETE FROM campaign_metrics 
        WHERE campaign_name = ? 
-       AND metrics_date BETWEEN ? AND ?`,
+       AND STR_TO_DATE(SUBSTRING_INDEX(metrics_date, ' ', 1), '%Y-%m-%d') 
+           BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')`,
       [campaign_name, start_date, end_date]
     );
 
