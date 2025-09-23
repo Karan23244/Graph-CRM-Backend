@@ -600,25 +600,44 @@ router.delete("/campaigndelete", async (req, res) => {
   }
 
   try {
-    // 1️⃣ Delete related events first
+    const deleteQuery = `
+      DELETE FROM campaign_metrics 
+      WHERE campaign_name = ? 
+      AND (
+        CASE 
+          WHEN metrics_date LIKE '%/%' 
+            THEN STR_TO_DATE(SUBSTRING_INDEX(metrics_date, ' ', 1), '%d/%m/%y')
+          ELSE 
+            STR_TO_DATE(SUBSTRING_INDEX(metrics_date, ' ', 1), '%Y-%m-%d')
+        END
+        BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
+      )
+    `;
+
+    // 1️⃣ Delete events first
     await pool.query(
       `DELETE ce
        FROM campaign_event_metrics ce
        JOIN campaign_metrics cm ON ce.campaign_id = cm.id
        WHERE cm.campaign_name = ? 
-       AND STR_TO_DATE(SUBSTRING_INDEX(cm.metrics_date, ' ', 1), '%Y-%m-%d') 
-           BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')`,
+       AND (
+         CASE 
+           WHEN cm.metrics_date LIKE '%/%' 
+             THEN STR_TO_DATE(SUBSTRING_INDEX(cm.metrics_date, ' ', 1), '%d/%m/%y')
+           ELSE 
+             STR_TO_DATE(SUBSTRING_INDEX(cm.metrics_date, ' ', 1), '%Y-%m-%d')
+         END
+         BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
+       )`,
       [campaign_name, start_date, end_date]
     );
 
-    // 2️⃣ Then delete campaign records
-    const [result] = await pool.query(
-      `DELETE FROM campaign_metrics 
-       WHERE campaign_name = ? 
-       AND STR_TO_DATE(SUBSTRING_INDEX(metrics_date, ' ', 1), '%Y-%m-%d') 
-           BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')`,
-      [campaign_name, start_date, end_date]
-    );
+    // 2️⃣ Delete main campaign records
+    const [result] = await pool.query(deleteQuery, [
+      campaign_name,
+      start_date,
+      end_date,
+    ]);
 
     if (result.affectedRows === 0) {
       return res
