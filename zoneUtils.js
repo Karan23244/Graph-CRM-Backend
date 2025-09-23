@@ -18,29 +18,26 @@ function calculateFraudScore(rti, pi, installs) {
 
 function getZoneDynamic(fraud, cti, ite, etc, conditions = []) {
   if (!conditions || conditions.length === 0) return "Red";
-
   for (const cond of conditions) {
-    const fMin = Number(cond.fraud_min || 0);
-    const fMax = Number(cond.fraud_max || 999999);
-    const cMin = Number(cond.cti_min || 0);
-    const cMax = Number(cond.cti_max || 999999);
-    const iMin = Number(cond.ite_min || 0);
-    const iMax = Number(cond.ite_max || 999999);
-    const eMin = Number(cond.etc_min || 0);
-    const eMax = Number(cond.etc_max || 999999);
-
-    // ✅ Apply ignore flags
-    const fraudOk = cond.fraud_ignore ? true : fraud >= fMin && fraud <= fMax;
-    const ctiOk = cond.cti_ignore ? true : cti >= cMin && cti <= cMax;
-    const iteOk = cond.ite_ignore ? true : ite >= iMin && ite <= iMax;
-    const etcOk = cond.etc_ignore ? true : etc >= eMin && etc <= eMax;
+    const fraudOk = cond.fraud_ignore
+      ? true
+      : fraud >= Number(cond.fraud_min) && fraud <= Number(cond.fraud_max);
+    const ctiOk = cond.cti_ignore
+      ? true
+      : cti >= Number(cond.cti_min) && cti <= Number(cond.cti_max);
+    const iteOk = cond.ite_ignore
+      ? true
+      : ite >= Number(cond.ite_min) && ite <= Number(cond.ite_max);
+    const etcOk = cond.etc_ignore
+      ? true
+      : etc >= Number(cond.etc_min) && etc <= Number(cond.etc_max);
 
     if (fraudOk && ctiOk && iteOk && etcOk) {
       return cond.zone_color;
     }
   }
 
-  return "Red"; // default fallback
+  return "Red"; // fallback
 }
 
 module.exports = {

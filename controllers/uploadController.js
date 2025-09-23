@@ -153,11 +153,7 @@ function normalizeDateRaw(raw) {
   // Try yyyy/mm/dd
   const m2 = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
   if (m2) {
-    const d = new Date(
-      parseInt(m2[1], 10),
-      parseInt(m2[2], 10) - 1,
-      parseInt(m2[3], 10)
-    );
+    const d = new Date(parseInt(m2[1], 10), parseInt(m2[2], 10) - 1, parseInt(m2[3], 10));
     if (!isNaN(d)) return d.toISOString().split("T")[0];
   }
 
@@ -182,11 +178,9 @@ function parseExcelDate(value, metricName, pid) {
   // Case 2: Excel serial number
   if (!isNaN(value) && Number(value) > 30000) {
     const base = new Date(1899, 11, 30);
-    const dt = new Date(base.getTime() + Number(value) * 86400 * 1000);
+    const dt = new Date(base.getTime() + (Number(value) * 86400 * 1000));
     const iso = dt.toISOString().split("T")[0];
-    console.log(
-      `📅 [${metricName}] Parsed Excel serial=${value} → ${iso} (PID=${pid})`
-    );
+    console.log(`📅 [${metricName}] Parsed Excel serial=${value} → ${iso} (PID=${pid})`);
     return iso;
   }
 
@@ -198,9 +192,7 @@ function parseExcelDate(value, metricName, pid) {
     let m = cleaned.match(/^(\d{4})[-/](\d{2})[-/](\d{2})$/);
     if (m) {
       const iso = `${m[1]}-${m[2]}-${m[3]}`;
-      console.log(
-        `📅 [${metricName}] Parsed YYYY-MM-DD='${cleaned}' → ${iso} (PID=${pid})`
-      );
+      console.log(`📅 [${metricName}] Parsed YYYY-MM-DD='${cleaned}' → ${iso} (PID=${pid})`);
       return iso;
     }
 
@@ -210,9 +202,7 @@ function parseExcelDate(value, metricName, pid) {
       const day = m[1].padStart(2, "0");
       const month = m[2].padStart(2, "0");
       const iso = `${m[3]}-${month}-${day}`;
-      console.log(
-        `📅 [${metricName}] Parsed DD/MM/YYYY='${cleaned}' → ${iso} (PID=${pid})`
-      );
+      console.log(`📅 [${metricName}] Parsed DD/MM/YYYY='${cleaned}' → ${iso} (PID=${pid})`);
       return iso;
     }
 
@@ -220,29 +210,25 @@ function parseExcelDate(value, metricName, pid) {
     const dt = new Date(cleaned);
     if (!isNaN(dt)) {
       const iso = dt.toISOString().split("T")[0];
-      console.log(
-        `📅 [${metricName}] JS fallback parsed '${cleaned}' → ${iso} (PID=${pid})`
-      );
+      console.log(`📅 [${metricName}] JS fallback parsed '${cleaned}' → ${iso} (PID=${pid})`);
       return iso;
     }
   }
 
-  console.log(
-    `❌ [${metricName}] Could not parse date='${value}' (PID=${pid})`
-  );
+  console.log(`❌ [${metricName}] Could not parse date='${value}' (PID=${pid})`);
   return null;
 }
 function extractDate(row, headers, metricName) {
   let rawDate = null;
 
   if (metricName === "noi" || metricName === "pi" || metricName === "rti") {
-    const key = headers.find((c) => c.toLowerCase().includes("installtime"));
+    const key = headers.find(c => c.toLowerCase().includes("installtime"));
     rawDate = key ? row[key] : null;
   } else if (metricName === "noe" || metricName === "pe") {
-    const key = headers.find((c) => c.toLowerCase().includes("eventtime"));
+    const key = headers.find(c => c.toLowerCase().includes("eventtime"));
     rawDate = key ? row[key] : null;
   } else if (metricName === "clicks") {
-    const key = headers.find((c) => c.toLowerCase() === "date");
+    const key = headers.find(c => c.toLowerCase() === "date");
     rawDate = key ? row[key] : null;
   }
 
@@ -254,30 +240,24 @@ function extractDate(row, headers, metricName) {
   // Handle string formats like "2025-09-14 15:53:15" or "2025-09-07"
   if (typeof rawDate === "string") {
     const dateOnly = rawDate.trim().substring(0, 10);
-    console.log(
-      `📅 Extracted date=${dateOnly} for metric=${metricName}, raw=${rawDate}`
-    );
+    // console.log(`📅 Extracted date=${dateOnly} for metric=${metricName}, raw=${rawDate}`);
     return dateOnly;
   }
 
   // Fallback: if Excel parser gave a Date object
   const d = new Date(rawDate);
   if (isNaN(d)) {
-    console.log(
-      `⚠️ Invalid date format metric=${metricName}, value=${rawDate}`
-    );
+    console.log(`⚠️ Invalid date format metric=${metricName}, value=${rawDate}`);
     return null;
   }
 
-  const formatted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-    2,
-    "0"
-  )}-${String(d.getDate()).padStart(2, "0")}`;
-  console.log(
-    `📅 Extracted date=${formatted} (from Date object) for metric=${metricName}, raw=${rawDate}`
-  );
+  const formatted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  console.log(`📅 Extracted date=${formatted} (from Date object) for metric=${metricName}, raw=${rawDate}`);
   return formatted;
 }
+
+
+
 
 // ---------------------------
 // Fetch adv_data by campaign + dateRange
@@ -294,9 +274,7 @@ async function getAdvDataFromDB(campaignName, startDate, endDate, os) {
 
   const pidMap = new Map();
   for (const r of rows) {
-    const pidKey = String(r.pid || "")
-      .trim()
-      .toLowerCase();
+    const pidKey = String(r.pid || "").trim().toLowerCase();
     if (!pidMap.has(pidKey)) {
       pidMap.set(pidKey, {
         pid: String(r.pid || "").trim(),
@@ -344,16 +322,9 @@ const handleUpload = async (req, res) => {
     }
 
     console.log("📂 Fetching adv_data for campaign:", campaignName);
-    const advData = await getAdvDataFromDB(
-      baseCampaignName,
-      startDate,
-      endDate,
-      os
-    );
+    const advData = await getAdvDataFromDB(baseCampaignName, startDate, endDate, os);
     if (!advData.length)
-      return res
-        .status(400)
-        .json({ msg: "No valid PID entries found in adv_data." });
+      return res.status(400).json({ msg: "No valid PID entries found in adv_data." });
 
     const metricCounts = {
       noi: new Map(),
@@ -379,20 +350,31 @@ const handleUpload = async (req, res) => {
     // Process uploaded files
     // ---------------------------
     for (const file of uploaded) {
-      const sortedKeys = Object.keys(FILE_MAP).sort(
-        (a, b) => b.length - a.length
-      );
-      const key = sortedKeys.find((k) =>
-        file.originalname.toLowerCase().includes(k)
-      );
-      if (!key) continue;
-      const metricName = FILE_MAP[key];
-      uploadedMetricNames.add(metricName);
+     // 🔹 Normalize helper
+     const normalize = (str) => str.toLowerCase().replace(/[\s\-_]/g, "");
+
+     const sortedKeys = Object.keys(FILE_MAP).sort((a, b) => b.length - a.length);
+     const fileNameNorm = normalize(file.originalname);
+     
+     const key = sortedKeys.find((k) =>
+       fileNameNorm.includes(normalize(k))
+     );
+     
+     if (key) {
+       const metricName = FILE_MAP[key];
+       uploadedMetricNames.add(metricName);
+       console.log(`📂 Processing file: ${file.originalname} → matched key="${key}" → metric=${metricName}`);
+     } else {
+       console.log(`❌ No key matched for: ${file.originalname} (normalized=${fileNameNorm})`);
+     }
+     
+
+const metricName = FILE_MAP[key];
+uploadedMetricNames.add(metricName);
+console.log(`📂 Processing file: ${file.originalname} → matched key="${key}" → metric=${metricName}`);
 
       await streamFileRows(file.path, async (row, headers) => {
-        const mediaSourceKey = headers.find((c) =>
-          /media[-_\s]?source/i.test(c)
-        );
+        const mediaSourceKey = headers.find((c) => /media[-_\s]?source/i.test(c));
         const sourceVal = mediaSourceKey ? row[mediaSourceKey] : null;
         if (!sourceVal) return;
         const pid = String(sourceVal).trim().toLowerCase();
@@ -400,97 +382,241 @@ const handleUpload = async (req, res) => {
         const metricsDate = extractDate(row, headers, metricName);
         if (!metricsDate) return;
 
-        if (metricName === "clicks") {
-          // normal clicks
-          const clicksKey = headers.find((c) => /clicks?/i.test(c));
-          const clicksVal = clicksKey
-            ? Number((row[clicksKey] || "").toString().replace(/,/g, "")) || 0
-            : 0;
-          incIfPidDate(metricCounts.clicks, pid, metricsDate, clicksVal);
 
-          // fallback NOI if installs file missing
-          if (!uploadedMetricNames.has("noi")) {
-            const noiKey = headers.find((c) => /installsappsflyer/i.test(c));
-            if (noiKey) {
-              const noiVal =
-                Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0;
-              incIfPidDate(metricCounts.noi, pid, metricsDate, noiVal);
-              console.log(
-                `📊 [Fallback NOI] PID=${pid}, date=${metricsDate}, val=${noiVal}`
-              );
-            }
-          }
-          // Normalize headers (lowercase, remove spaces/dashes/underscores)
-          const normalize = (str) => str.toLowerCase().replace(/[\s\-_]/g, "");
+        // check once if installs file is present
+// Detect presence of key files once
+const hasNoiFile = uploaded.some(f =>
+  f.originalname.toLowerCase().includes("installs")
+);
+// const hasNoeFile = uploaded.some(f =>
+//   f.originalname.toLowerCase().includes("in-app-event")
+// );
 
-          const normHeaders = headers.map((h) => normalize(h));
+if (metricName === "clicks") {
+  // normal clicks
+  const clicksKey = headers.find((c) => /clicks?/i.test(c));
+  const clicksVal = clicksKey
+    ? Number((row[clicksKey] || "").toString().replace(/,/g, "")) || 0
+    : 0;
+  incIfPidDate(metricCounts.clicks, pid, metricsDate, clicksVal);
 
-          // ✅ Fallback NOE (unique-users ltv days cumulative appsflyer)
-          if (
-            !uploaded.some((f) =>
-              f.originalname.toLowerCase().includes("in-app-event")
-            )
-          ) {
-            const idx = normHeaders.findIndex((h) =>
-              h.includes("uniqueusersltvdayscumulativeappsflyer")
-            );
-            if (idx !== -1) {
-              const noeKey = headers[idx];
-              const noeVal =
-                Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
-              if (noeVal > 0) {
-                incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
-                console.log(
-                  `📊 [Fallback NOE] PID=${pid}, date=${metricsDate}, key=${noeKey}, value=${noeVal}`
-                );
-              } else {
-                console.log(
-                  `⚠️ NOE fallback header found (${noeKey}) but value empty for PID=${pid}`
-                );
-              }
-            } else {
-              console.log("❌ No NOE fallback header found in clicks file");
-            }
-          }
+  // ✅ fallback NOI only if NO installs file uploaded at all
+  if (!hasNoiFile) {
+    const noiKey = headers.find((c) => /installsappsflyer/i.test(c));
+    if (noiKey) {
+      const noiVal =
+        Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0;
+      incIfPidDate(metricCounts.noi, pid, metricsDate, noiVal);
+      console.log(
+        `📊 [Fallback NOI] PID=${pid}, date=${metricsDate}, val=${noiVal}`
+      );
+    }
+  }
 
-          return;
-        }
+  // Normalize headers (lowercase, remove spaces/dashes/underscores)
+  const normalize = (str) =>
+    str.toLowerCase().replace(/[\s\-_]/g, "");
+  const normHeaders = headers.map((h) => normalize(h));
+
+  // ✅ fallback NOE only if NO in-app-event file uploaded
+  // if (!hasNoeFile) {
+  //   const idx = normHeaders.findIndex((h) =>
+  //     h.includes("uniqueusersltvdayscumulativeappsflyer")
+  //   );
+  //   if (idx !== -1) {
+  //     const noeKey = headers[idx];
+  //     const noeVal =
+  //       Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
+  //     if (noeVal > 0) {
+  //       incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
+  //       console.log(
+  //         `📊 [Fallback NOE] PID=${pid}, date=${metricsDate}, key=${noeKey}, value=${noeVal}`
+  //       );
+  //     } else {
+  //       console.log(
+  //         `⚠️ NOE fallback header found (${noeKey}) but value empty for PID=${pid}`
+  //       );
+  //     }
+  //   } else {
+  //     console.log("❌ No NOE fallback header found in clicks file");
+  //   }
+  // }
+
+  return;
+}
+
+
+  //       if (metricName === "clicks") {
+  //         // normal clicks
+  //         const clicksKey = headers.find((c) => /clicks?/i.test(c));
+  //         const clicksVal = clicksKey
+  //           ? Number((row[clicksKey] || "").toString().replace(/,/g, "")) || 0
+  //           : 0;
+  //         incIfPidDate(metricCounts.clicks, pid, metricsDate, clicksVal);
+
+  //         // fallback NOI if installs file missing
+  //         if (!uploadedMetricNames.has("noi")) {
+  //           const noiKey = headers.find((c) =>
+  //             /installsappsflyer/i.test(c)
+  //           );
+  //           if (noiKey) {
+  //             const noiVal = Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0;
+  //             incIfPidDate(metricCounts.noi, pid, metricsDate, noiVal);
+  //             // console.log(`📊 [Fallback NOI] PID=${pid}, date=${metricsDate}, val=${noiVal}`);
+  //           }
+  //         }
+  //          // Normalize headers (lowercase, remove spaces/dashes/underscores)
+  // const normalize = (str) =>
+  //   str.toLowerCase().replace(/[\s\-_]/g, "");
+
+  // const normHeaders = headers.map((h) => normalize(h));
+
+
+  //                 // ✅ Fallback NOE (unique-users ltv days cumulative appsflyer)
+  // if (!uploaded.some((f) => f.originalname.toLowerCase().includes("in-app-event"))) {
+  //   const idx = normHeaders.findIndex((h) =>
+  //     h.includes("uniqueusersltvdayscumulativeappsflyer")
+  //   );
+  //   if (idx !== -1) {
+  //     const noeKey = headers[idx];
+  //     const noeVal =
+  //       Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
+  //     if (noeVal > 0) {
+  //       incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
+  //       console.log(
+  //         `📊 [Fallback NOE] PID=${pid}, date=${metricsDate}, key=${noeKey}, value=${noeVal}`
+  //       );
+  //     } else {
+  //       console.log(
+  //         `⚠️ NOE fallback header found (${noeKey}) but value empty for PID=${pid}`
+  //       );
+  //     }
+  //   } else {
+  //     console.log("❌ No NOE fallback header found in clicks file");
+  //   }
+  // }
+
+  //         return;
+  //       }
+
+
 
         if (metricName === "noi") {
-          // installs normal handling
-          const noiKey = headers.find((c) => /installs?/i.test(c));
-          const noiVal = noiKey
-            ? Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0
-            : 0;
-          incIfPidDate(metricCounts.noi, pid, metricsDate, noiVal);
+          // Use Media Source + Install Time
+          const mediaSourceKey = headers.find((c) => /media\s*source/i.test(c));
+          const installTimeKey = headers.find((c) => /install\s*time/i.test(c));
+        
+          const pid = mediaSourceKey ? (row[mediaSourceKey] || "").trim().toLowerCase() : null;
+          if (!pid) return;
+        
+          const installTimeRaw = installTimeKey ? row[installTimeKey] : null;
+          const dateVal = installTimeRaw ? new Date(installTimeRaw) : null;
+          if (!dateVal || isNaN(dateVal)) return;
+        
+          const metricsDate = dateVal.toISOString().split("T")[0];
+        
+          // Count 1 install per row
+          incIfPidDate(metricCounts.noi, pid, metricsDate, 1);
+        
+          // Debug log
+          console.log(`📊 [NOI] PID=${pid}, date=${metricsDate}, +1`);
           return;
         }
 
-        if (metricName === "pe" || metricName === "noe") {
-          const evKey = headers.find((c) => /event[_\s]?name/i.test(c));
-          if (!eventCountsByPidDate.has(pid))
-            eventCountsByPidDate.set(pid, new Map());
-          const pidDateMap = eventCountsByPidDate.get(pid);
-          const dateMap = pidDateMap.get(metricsDate) || new Map();
-          if (evKey) {
-            const ev = String(row[evKey] || "")
-              .trim()
-              .toLowerCase();
-            dateMap.set(ev, (dateMap.get(ev) || 0) + 1);
-          }
-          pidDateMap.set(metricsDate, dateMap);
-          incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
-          return;
-        }
+        
+        if (metricName === "pe" || metricName === "noe") { 
+          const evKey = headers.find((c) => /event[_\s]?name/i.test(c)); if (!eventCountsByPidDate.has(pid)) 
+            eventCountsByPidDate.set(pid, new Map()); const pidDateMap = eventCountsByPidDate.get(pid); 
+          const dateMap = pidDateMap.get(metricsDate) || new Map(); if (evKey) {
+             const ev = String(row[evKey] || "").trim().toLowerCase(); dateMap.set(ev, (dateMap.get(ev) || 0) + 1); } 
+          pidDateMap.set(metricsDate, dateMap); 
+          incIfPidDate(metricCounts[metricName], pid, metricsDate, 1); return; }
+        // if (metricName === "pe" || metricName === "noe") {
+        //   // Find event time column
+        //   const dateKey = headers.find((c) => /event[_\s]?time/i.test(c));
+        //   let rawDate = dateKey ? row[dateKey] : null;
+        
+        //   // Normalize to YYYY-MM-DD
+        //   const metricsDate = normalizeDateRaw(rawDate);
+        //   if (!metricsDate) return; // skip if invalid
+        
+        //   // Find event name and count
+        //   const evKey = headers.find((c) => /event[_\s]?name/i.test(c));
+        //   const countKey =
+        //     headers.find((c) => /event[_\s]?count/i.test(c)) ||
+        //     headers.find((c) => /uniqueusers/i.test(c));
+        
+        //   if (!eventCountsByPidDate.has(pid)) eventCountsByPidDate.set(pid, new Map());
+        //   const pidDateMap = eventCountsByPidDate.get(pid);
+        //   const dateMap = pidDateMap.get(metricsDate) || new Map();
+        
+        //   if (evKey) {
+        //     const ev = String(row[evKey] || "").trim().toLowerCase();
+        //     const evCount = countKey
+        //       ? Number((row[countKey] || "").toString().replace(/,/g, "")) || 0
+        //       : 1;
+        
+        //     dateMap.set(ev, (dateMap.get(ev) || 0) + evCount);
+        //     incIfPidDate(metricCounts[metricName], pid, metricsDate, evCount);
+        
+        //     console.log(
+        //       `📊 [${metricName.toUpperCase()}] PID=${pid}, date=${metricsDate}, event=${ev}, count=${evCount}`
+        //     );
+        //   }
+        
+        //   pidDateMap.set(metricsDate, dateMap);
+        //   return;
+        // }
+        
+        // if (metricName === "pe" || metricName === "noe") {
+        //      // Find event time column
+        //   const dateKey = headers.find((c) => /event[_\s]?time/i.test(c));
+        //   let rawDate = dateKey ? row[dateKey] : null;
+        
+        //   // Normalize to YYYY-MM-DD
+        //   const metricsDate = normalizeDateRaw(rawDate);
+        //   if (!metricsDate) return; // skip if invalid
+        
+        //   // Find event name and count
+        //   const evKey = headers.find((c) => /event[_\s]?name/i.test(c));
+        //   const countKey =
+        //     headers.find((c) => /event[_\s]?count/i.test(c)) ||
+        //     headers.find((c) => /uniqueusers/i.test(c));
+            
+        //   if (!eventCountsByPidDate.has(pid)) eventCountsByPidDate.set(pid, new Map());
+        //   const pidDateMap = eventCountsByPidDate.get(pid);
+        //   const dateMap = pidDateMap.get(metricsDate) || new Map();
+        
+        //   if (evKey) {
+        //     const ev = String(row[evKey] || "").trim().toLowerCase();
+        //     const evCount = countKey
+        //       ? Number((row[countKey] || "").toString().replace(/,/g, "")) || 0
+        //       : 1; // fallback
+        
+        //     dateMap.set(ev, (dateMap.get(ev) || 0) + evCount);
+        //     incIfPidDate(metricCounts[metricName], pid, metricsDate, evCount);
+        
+        //     console.log(
+        //       `📊 [${metricName.toUpperCase()}] PID=${pid}, date=${metricsDate}, event=${ev}, count=${evCount}`
+        //     );
+        //   }
+        
+        //   pidDateMap.set(metricsDate, dateMap);
+        //   return;
+        // }
+        
+
 
         // default
-        incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
+        // incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
       });
     }
 
     // ... rest of your DB insert logic unchanged ...
 
+
     // ... rest of your DB insert logic unchanged ...
+
 
     // ---------------------------
     // Prepare DB inserts (per pid + date)
@@ -551,8 +677,7 @@ const handleUpload = async (req, res) => {
           d.nocrm,
         ]);
 
-        const pidEvents =
-          eventCountsByPidDate.get(pidLower)?.get(date) || new Map();
+        const pidEvents = eventCountsByPidDate.get(pidLower)?.get(date) || new Map();
         for (const [eventName, count] of pidEvents.entries()) {
           // store with metrics_date in events table (so it's also date keyed)
           eventData.push([d.pid, date, eventName, count, "event"]);
@@ -589,9 +714,7 @@ const handleUpload = async (req, res) => {
       await batchInsert(sqlEvents, eventData, 500);
     }
 
-    res
-      .status(200)
-      .json({ msg: "Upload successful", rowsInserted: metricsData.length });
+    res.status(200).json({ msg: "Upload successful", rowsInserted: metricsData.length });
   } catch (err) {
     console.error("❌ Error in handleUpload:", err);
     res.status(500).json({ msg: "Server error", error: err.message });
