@@ -608,7 +608,7 @@ if (metricName === "clicks") {
 
 
         // default
-        // incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
+        incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
       });
     }
 
