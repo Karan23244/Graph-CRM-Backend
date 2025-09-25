@@ -501,19 +501,35 @@ const handleUpload = async (req, res) => {
         //   return;
         // }
         if (metricName === "clicks") {
-          // normal clicks
-          const clicksKey = headers.find((c) => /clicks?/i.test(c));
-          const clicksVal = clicksKey
-            ? Number((row[clicksKey] || "").toString().replace(/,/g, "")) || 0
-            : 0;
-          incIfPidDate(metricCounts.clicks, pid, metricsDate, clicksVal);
+          // ---- Normalize headers once ----
+          const normalizeHeader = (s) =>
+            s
+              .toString()
+              .toLowerCase()
+              .replace(/[\s\-_]/g, ""); // remove spaces, dashes, underscores
+          const headers = Object.keys(row);
+          const normHeaders = headers.map((h) => normalizeHeader(h));
 
-          // ✅ fallback NOI (from installs appsflyer column in clicks)
+          // ---- Normal clicks ----
+          const clicksIdx = normHeaders.findIndex(
+            (c) => c === "clicks" || c === "click"
+          );
+          if (clicksIdx !== -1) {
+            const clicksKey = headers[clicksIdx]; // use original header to access row value
+            const clicksVal =
+              Number((row[clicksKey] || "").toString().replace(/,/g, "")) || 0;
+            incIfPidDate(metricCounts.clicks, pid, metricsDate, clicksVal);
+          } else {
+            incIfPidDate(metricCounts.clicks, pid, metricsDate, 0);
+          }
+
+          // ---- Fallback NOI (if installs file not uploaded, get from installs appsflyer column in clicks) ----
           if (!uploadedMetricNames.has("noi")) {
-            const noiKey = headers.find((c) =>
-              /installsappsflyer/i.test(c.replace(/\s+/g, "").toLowerCase())
+            const noiIdx = normHeaders.findIndex((c) =>
+              c.includes("installsappsflyer")
             );
-            if (noiKey) {
+            if (noiIdx !== -1) {
+              const noiKey = headers[noiIdx];
               const noiVal =
                 Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0;
               incIfPidDate(metricCounts.noi, pid, metricsDate, noiVal);
@@ -523,19 +539,13 @@ const handleUpload = async (req, res) => {
             }
           }
 
-          // ✅ fallback NOE (from unique-users ltv days cumulative appsflyer af_FTU column in clicks)
+          // ---- Fallback NOE (if in-app-event file not uploaded, get from unique-users... column in clicks) ----
           if (!uploadedMetricNames.has("noe")) {
-            const normalize = (s) =>
-              s
-                .toString()
-                .toLowerCase()
-                .replace(/[\s\-_]/g, ""); // remove spaces, dashes, underscores
-
-            const noeKey = headers.find((c) =>
-              normalize(c).includes("uniqueusersltvdayscumulativeappsflyer")
+            const noeIdx = normHeaders.findIndex((c) =>
+              c.includes("uniqueusersltvdayscumulativeappsflyer")
             );
-
-            if (noeKey) {
+            if (noeIdx !== -1) {
+              const noeKey = headers[noeIdx];
               const noeVal =
                 Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
               incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
