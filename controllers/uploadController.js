@@ -449,6 +449,57 @@ const handleUpload = async (req, res) => {
         //   f.originalname.toLowerCase().includes("in-app-event")
         // );
 
+        // if (metricName === "clicks") {
+        //   // normal clicks
+        //   const clicksKey = headers.find((c) => /clicks?/i.test(c));
+        //   const clicksVal = clicksKey
+        //     ? Number((row[clicksKey] || "").toString().replace(/,/g, "")) || 0
+        //     : 0;
+        //   incIfPidDate(metricCounts.clicks, pid, metricsDate, clicksVal);
+
+        //   // ✅ fallback NOI only if NO installs file uploaded at all
+        //   if (!hasNoiFile) {
+        //     const noiKey = headers.find((c) => /installsappsflyer/i.test(c));
+        //     if (noiKey) {
+        //       const noiVal =
+        //         Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0;
+        //       incIfPidDate(metricCounts.noi, pid, metricsDate, noiVal);
+        //       console.log(
+        //         `📊 [Fallback NOI] PID=${pid}, date=${metricsDate}, val=${noiVal}`
+        //       );
+        //     }
+        //   }
+
+        //   // Normalize headers (lowercase, remove spaces/dashes/underscores)
+        //   const normalize = (str) => str.toLowerCase().replace(/[\s\-_]/g, "");
+        //   const normHeaders = headers.map((h) => normalize(h));
+
+        //   // ✅ fallback NOE only if NO in-app-event file uploaded
+        //   // if (!hasNoeFile) {
+        //   //   const idx = normHeaders.findIndex((h) =>
+        //   //     h.includes("uniqueusersltvdayscumulativeappsflyer")
+        //   //   );
+        //   //   if (idx !== -1) {
+        //   //     const noeKey = headers[idx];
+        //   //     const noeVal =
+        //   //       Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
+        //   //     if (noeVal > 0) {
+        //   //       incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
+        //   //       console.log(
+        //   //         `📊 [Fallback NOE] PID=${pid}, date=${metricsDate}, key=${noeKey}, value=${noeVal}`
+        //   //       );
+        //   //     } else {
+        //   //       console.log(
+        //   //         `⚠️ NOE fallback header found (${noeKey}) but value empty for PID=${pid}`
+        //   //       );
+        //   //     }
+        //   //   } else {
+        //   //     console.log("❌ No NOE fallback header found in clicks file");
+        //   //   }
+        //   // }
+
+        //   return;
+        // }
         if (metricName === "clicks") {
           // normal clicks
           const clicksKey = headers.find((c) => /clicks?/i.test(c));
@@ -457,9 +508,11 @@ const handleUpload = async (req, res) => {
             : 0;
           incIfPidDate(metricCounts.clicks, pid, metricsDate, clicksVal);
 
-          // ✅ fallback NOI only if NO installs file uploaded at all
-          if (!hasNoiFile) {
-            const noiKey = headers.find((c) => /installsappsflyer/i.test(c));
+          // ✅ fallback NOI (from installs appsflyer column in clicks)
+          if (!uploadedMetricNames.has("noi")) {
+            const noiKey = headers.find((c) =>
+              /installsappsflyer/i.test(c.replace(/\s+/g, "").toLowerCase())
+            );
             if (noiKey) {
               const noiVal =
                 Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0;
@@ -470,33 +523,27 @@ const handleUpload = async (req, res) => {
             }
           }
 
-          // Normalize headers (lowercase, remove spaces/dashes/underscores)
-          const normalize = (str) => str.toLowerCase().replace(/[\s\-_]/g, "");
-          const normHeaders = headers.map((h) => normalize(h));
+          // ✅ fallback NOE (from unique-users ltv days cumulative appsflyer af_FTU column in clicks)
+          if (!uploadedMetricNames.has("noe")) {
+            const normalize = (s) =>
+              s
+                .toString()
+                .toLowerCase()
+                .replace(/[\s\-_]/g, ""); // remove spaces, dashes, underscores
 
-          // ✅ fallback NOE only if NO in-app-event file uploaded
-          // if (!hasNoeFile) {
-          //   const idx = normHeaders.findIndex((h) =>
-          //     h.includes("uniqueusersltvdayscumulativeappsflyer")
-          //   );
-          //   if (idx !== -1) {
-          //     const noeKey = headers[idx];
-          //     const noeVal =
-          //       Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
-          //     if (noeVal > 0) {
-          //       incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
-          //       console.log(
-          //         `📊 [Fallback NOE] PID=${pid}, date=${metricsDate}, key=${noeKey}, value=${noeVal}`
-          //       );
-          //     } else {
-          //       console.log(
-          //         `⚠️ NOE fallback header found (${noeKey}) but value empty for PID=${pid}`
-          //       );
-          //     }
-          //   } else {
-          //     console.log("❌ No NOE fallback header found in clicks file");
-          //   }
-          // }
+            const noeKey = headers.find((c) =>
+              normalize(c).includes("uniqueusersltvdayscumulativeappsflyer")
+            );
+
+            if (noeKey) {
+              const noeVal =
+                Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
+              incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
+              console.log(
+                `📊 [Fallback NOE] PID=${pid}, date=${metricsDate}, val=${noeVal}`
+              );
+            }
+          }
 
           return;
         }
