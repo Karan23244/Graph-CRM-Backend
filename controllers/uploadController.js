@@ -48,6 +48,14 @@ async function streamXlsxRows(filePath, onRow) {
     await onRow(rowObj, headers);
   }
 }
+// --- Add this helper at the top of your file ---
+function formatLocalDate(date) {
+  if (!(date instanceof Date) || isNaN(date)) return null;
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`; // Pure local date, no UTC shift
+}
 
 function streamCsvRows(filePath, onRow) {
   return new Promise((resolve, reject) => {
@@ -91,12 +99,42 @@ async function batchInsert(sql, data, batchSize = 500) {
 }
 
 // Convert Excel serial -> JS Date (Excel epoch 1899-12-30)
+// function excelSerialToDate(serial) {
+//   // handle negative/invalid serials gracefully
+//   if (typeof serial !== "number" || isNaN(serial)) return null;
+//   const epoch = Date.UTC(1899, 11, 30);
+//   const ms = Math.round(serial * 24 * 60 * 60 * 1000);
+//   return new Date(epoch + ms);
+// }
+// Convert Excel serial -> "YYYY-MM-DD" (no time)
+// function excelSerialToDate(serial) {
+//   if (typeof serial !== "number" || isNaN(serial)) return null;
+
+//   // Excel's day 0 = 1899-12-30
+//   const epoch = Date.UTC(1899, 11, 30);
+//   const ms = Math.round(serial * 24 * 60 * 60 * 1000);
+//   const date = new Date(epoch + ms);
+
+//   // Extract using local date parts, not UTC time
+//   const year = date.getFullYear();
+//   const month = String(date.getMonth() + 1).padStart(2, "0");
+//   const day = String(date.getDate()).padStart(2, "0");
+
+//   return `${year}-${month}-${day}`;
+// }
 function excelSerialToDate(serial) {
-  // handle negative/invalid serials gracefully
   if (typeof serial !== "number" || isNaN(serial)) return null;
-  const epoch = Date.UTC(1899, 11, 30);
-  const ms = Math.round(serial * 24 * 60 * 60 * 1000);
-  return new Date(epoch + ms);
+
+  // Excel starts on 1899-12-30
+  const base = new Date(1899, 11, 30);
+  const jsDate = new Date(base.getTime() + serial * 86400000);
+
+  // Force extract local date parts — no timezone shift
+  const year = jsDate.getFullYear();
+  const month = String(jsDate.getMonth() + 1).padStart(2, "0");
+  const day = String(jsDate.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
 }
 
 // Robust normalization for a raw date value -> 'YYYY-MM-DD' or null
@@ -106,7 +144,10 @@ function normalizeDateRaw(raw) {
   // If already a Date object
   if (raw instanceof Date) {
     if (isNaN(raw)) return null;
-    return raw.toISOString().split("T")[0];
+    return `${raw.getFullYear()}-${String(raw.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(raw.getDate()).padStart(2, "0")}`;
   }
 
   // ExcelJS sometimes returns objects like { richText: ... } or { text: '...' } - handle common cases
@@ -123,7 +164,12 @@ function normalizeDateRaw(raw) {
   // If number -> treat as excel serial
   if (typeof raw === "number") {
     const d = excelSerialToDate(raw);
-    if (d && !isNaN(d)) return d.toISOString().split("T")[0];
+    if (d && !isNaN(d))
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+        2,
+        "0"
+      )}-${String(d.getDate()).padStart(2, "0")}`;
+
     return null;
   }
 
@@ -137,7 +183,12 @@ function normalizeDateRaw(raw) {
 
   // Try Date.parse first (handles ISO formats)
   const parsed = new Date(s);
-  if (!isNaN(parsed)) return parsed.toISOString().split("T")[0];
+  if (!isNaN(parsed)) {
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(parsed.getDate()).padStart(2, "0")}`;
+  }
 
   // Try dd/mm/yy or dd/mm/yyyy
   const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
@@ -147,7 +198,12 @@ function normalizeDateRaw(raw) {
     let year = parseInt(m1[3], 10);
     if (year < 100) year += 2000;
     const d = new Date(year, month - 1, day);
-    if (!isNaN(d)) return d.toISOString().split("T")[0];
+    if (!isNaN(d)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
   }
 
   // Try yyyy/mm/dd
@@ -158,7 +214,12 @@ function normalizeDateRaw(raw) {
       parseInt(m2[2], 10) - 1,
       parseInt(m2[3], 10)
     );
-    if (!isNaN(d)) return d.toISOString().split("T")[0];
+    if (!isNaN(d)) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
   }
 
   // If not parsed, return null
@@ -174,7 +235,10 @@ function parseExcelDate(value, metricName, pid) {
 
   // Case 1: Already a Date object
   if (value instanceof Date) {
-    const iso = value.toISOString().split("T")[0];
+    const iso = `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(
+      2,
+      "0"
+    )}-${String(value.getDate()).padStart(2, "0")}`;
     console.log(`📅 [${metricName}] Parsed Date object → ${iso} (PID=${pid})`);
     return iso;
   }
@@ -183,7 +247,7 @@ function parseExcelDate(value, metricName, pid) {
   if (!isNaN(value) && Number(value) > 30000) {
     const base = new Date(1899, 11, 30);
     const dt = new Date(base.getTime() + Number(value) * 86400 * 1000);
-    const iso = dt.toISOString().split("T")[0];
+    const iso = formatLocalDate(dt);
     console.log(
       `📅 [${metricName}] Parsed Excel serial=${value} → ${iso} (PID=${pid})`
     );
@@ -219,7 +283,7 @@ function parseExcelDate(value, metricName, pid) {
     // fallback
     const dt = new Date(cleaned);
     if (!isNaN(dt)) {
-      const iso = dt.toISOString().split("T")[0];
+      const iso = formatLocalDate(dt);
       console.log(
         `📅 [${metricName}] JS fallback parsed '${cleaned}' → ${iso} (PID=${pid})`
       );
@@ -232,6 +296,75 @@ function parseExcelDate(value, metricName, pid) {
   );
   return null;
 }
+// function extractDate(row, headers, metricName) {
+//   let rawDate = null;
+
+//   if (metricName === "noi" || metricName === "pi" || metricName === "rti") {
+//     const key = headers.find((c) => c.toLowerCase().includes("installtime"));
+//     rawDate = key ? row[key] : null;
+//   } else if (metricName === "noe" || metricName === "pe") {
+//     const key = headers.find((c) => c.toLowerCase().includes("eventtime"));
+//     rawDate = key ? row[key] : null;
+//   } else if (metricName === "clicks") {
+//     const key = headers.find((c) => c.toLowerCase() === "date");
+//     rawDate = key ? row[key] : null;
+//   }
+
+//   if (!rawDate) {
+//     console.log(`⚠️ No date found for metric=${metricName}, row=`, row);
+//     return null;
+//   }
+
+//   // Handle string formats like "2025-09-14 15:53:15" or "2025-09-07"
+//   if (typeof rawDate === "string") {
+//     if (!rawDate) return null;
+
+//     let date;
+
+//     // Case 1: already in YYYY-MM-DD or YYYY-MM-DD HH:mm:ss
+//     if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
+//       date = new Date(rawDate);
+//     }
+//     // Case 2: format like DD/MM/YYYY HH:mm or DD/MM/YY
+//     else if (/^\d{2}\/\d{2}\/\d{2,4}/.test(rawDate)) {
+//       const parts = rawDate.split(/[\/\s:]/); // split by / space :
+//       let [day, month, year] = parts;
+
+//       // handle 2-digit year
+//       if (year.length === 2) {
+//         year = "20" + year;
+//       }
+
+//       date = new Date(`${year}-${month}-${day}`);
+//     }
+
+//     if (isNaN(date)) {
+//       return null; // fallback if not parsable
+//     }
+
+//     // Always return YYYY-MM-DD
+//     return date.toISOString().split("T")[0];
+//   }
+
+//   // Fallback: if Excel parser gave a Date object
+//   const d = new Date(rawDate);
+//   if (isNaN(d)) {
+//     console.log(
+//       `⚠️ Invalid date format metric=${metricName}, value=${rawDate}`
+//     );
+//     return null;
+//   }
+
+//   const formatted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+//     2,
+//     "0"
+//   )}-${String(d.getDate()).padStart(2, "0")}`;
+//   console.log(
+//     `📅 Extracted date=${formatted} (from Date object) for metric=${metricName}, raw=${rawDate}`
+//   );
+//   return formatted;
+// }
+
 function extractDate(row, headers, metricName) {
   let rawDate = null;
 
@@ -246,59 +379,63 @@ function extractDate(row, headers, metricName) {
     rawDate = key ? row[key] : null;
   }
 
-  if (!rawDate) {
-    console.log(`⚠️ No date found for metric=${metricName}, row=`, row);
-    return null;
-  }
+  if (!rawDate) return null;
 
-  // Handle string formats like "2025-09-14 15:53:15" or "2025-09-07"
   if (typeof rawDate === "string") {
-    if (!rawDate) return null;
+    const s = rawDate.trim();
 
-    let date;
-
-    // Case 1: already in YYYY-MM-DD or YYYY-MM-DD HH:mm:ss
-    if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
-      date = new Date(rawDate);
+    // Match formats like "29/09/2025 20:10" or "29/09/2025"
+    const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if (m1) {
+      let [_, d, m, y] = m1;
+      if (y.length === 2) y = "20" + y;
+      // Return directly without timezone shift
+      return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
     }
-    // Case 2: format like DD/MM/YYYY HH:mm or DD/MM/YY
-    else if (/^\d{2}\/\d{2}\/\d{2,4}/.test(rawDate)) {
-      const parts = rawDate.split(/[\/\s:]/); // split by / space :
-      let [day, month, year] = parts;
 
-      // handle 2-digit year
-      if (year.length === 2) {
-        year = "20" + year;
+    // Match "2025-09-29" or "2025/09/29"
+    const m2 = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (m2) {
+      const [_, y, m, d] = m2;
+      return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
+    }
+
+    // As a fallback, don't use toISOString — just trust local parts
+    const parts = s.split(/[\/\-\s:]/);
+    if (parts.length >= 3) {
+      let [p1, p2, p3] = parts;
+      if (p1.length === 4) {
+        // YYYY-MM-DD
+        return `${p1}-${p2.padStart(2, "0")}-${p3.padStart(2, "0")}`;
+      } else {
+        // DD-MM-YYYY
+        if (p3.length === 2) p3 = "20" + p3;
+        return `${p3}-${p2.padStart(2, "0")}-${p1.padStart(2, "0")}`;
       }
-
-      date = new Date(`${year}-${month}-${day}`);
     }
-
-    if (isNaN(date)) {
-      return null; // fallback if not parsable
-    }
-
-    // Always return YYYY-MM-DD
-    return date.toISOString().split("T")[0];
-  }
-
-  // Fallback: if Excel parser gave a Date object
-  const d = new Date(rawDate);
-  if (isNaN(d)) {
-    console.log(
-      `⚠️ Invalid date format metric=${metricName}, value=${rawDate}`
-    );
     return null;
   }
 
-  const formatted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-    2,
-    "0"
-  )}-${String(d.getDate()).padStart(2, "0")}`;
-  console.log(
-    `📅 Extracted date=${formatted} (from Date object) for metric=${metricName}, raw=${rawDate}`
-  );
-  return formatted;
+  // Excel numeric serials
+  if (typeof rawDate === "number" && rawDate > 30000) {
+    const excelEpoch = new Date(1899, 11, 30);
+    const jsDate = new Date(excelEpoch.getTime() + rawDate * 86400000);
+    // Get local date parts (not UTC)
+    const y = jsDate.getFullYear();
+    const m = String(jsDate.getMonth() + 1).padStart(2, "0");
+    const d = String(jsDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  // If Date object
+  if (rawDate instanceof Date && !isNaN(rawDate)) {
+    const y = rawDate.getFullYear();
+    const m = String(rawDate.getMonth() + 1).padStart(2, "0");
+    const d = String(rawDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  return null;
 }
 
 // ---------------------------
@@ -428,7 +565,6 @@ const handleUpload = async (req, res) => {
       console.log(
         `📂 Processing file: ${file.originalname} → matched key="${key}" → metric=${metricName}`
       );
-
       await streamFileRows(file.path, async (row, headers) => {
         const mediaSourceKey = headers.find((c) =>
           /media[-_\s]?source/i.test(c)
@@ -624,7 +760,9 @@ const handleUpload = async (req, res) => {
           const dateVal = installTimeRaw ? new Date(installTimeRaw) : null;
           if (!dateVal || isNaN(dateVal)) return;
 
-          const metricsDate = dateVal.toISOString().split("T")[0];
+          const metricsDate = `${dateVal.getFullYear()}-${String(
+            dateVal.getMonth() + 1
+          ).padStart(2, "0")}-${String(dateVal.getDate()).padStart(2, "0")}`;
 
           // Count 1 install per row
           incIfPidDate(metricCounts.noi, pid, metricsDate, 1);
