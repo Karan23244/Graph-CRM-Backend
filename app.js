@@ -4,10 +4,28 @@ const dotenv = require("dotenv");
 const uploadRoutes = require("./routes/uploadRoutes");
 const campaignRoutes = require("./routes/campaignRoutes");
 const router = express.Router();
+const http = require("http");
 const pool = require("./config/db");
 dotenv.config();
 const app = express();
+const server = http.createServer(app);
+const { Server } = require("socket.io");
+// initialize socket.io
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+  },
+});
+// make io available globally
+app.set("io", io);
+// ✅ Connection and disconnection logs
+io.on("connection", (socket) => {
+  console.log(`🟢 Socket connected: ${socket.id}`);
 
+  socket.on("disconnect", (reason) => {
+    console.log(`🔴 Socket disconnected: ${socket.id} (Reason: ${reason})`);
+  });
+});
 // app.use(cors());
 // app.use(express.json());
 
@@ -168,4 +186,6 @@ app.post("/api/zone-conditions/:campaign/set-ignores", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 2001;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`🚀 Server + Socket.IO running on http://localhost:${PORT}`);
+});

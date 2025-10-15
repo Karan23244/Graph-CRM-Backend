@@ -97,31 +97,6 @@ async function batchInsert(sql, data, batchSize = 500) {
     await pool.query(sql, [batch]);
   }
 }
-
-// Convert Excel serial -> JS Date (Excel epoch 1899-12-30)
-// function excelSerialToDate(serial) {
-//   // handle negative/invalid serials gracefully
-//   if (typeof serial !== "number" || isNaN(serial)) return null;
-//   const epoch = Date.UTC(1899, 11, 30);
-//   const ms = Math.round(serial * 24 * 60 * 60 * 1000);
-//   return new Date(epoch + ms);
-// }
-// Convert Excel serial -> "YYYY-MM-DD" (no time)
-// function excelSerialToDate(serial) {
-//   if (typeof serial !== "number" || isNaN(serial)) return null;
-
-//   // Excel's day 0 = 1899-12-30
-//   const epoch = Date.UTC(1899, 11, 30);
-//   const ms = Math.round(serial * 24 * 60 * 60 * 1000);
-//   const date = new Date(epoch + ms);
-
-//   // Extract using local date parts, not UTC time
-//   const year = date.getFullYear();
-//   const month = String(date.getMonth() + 1).padStart(2, "0");
-//   const day = String(date.getDate()).padStart(2, "0");
-
-//   return `${year}-${month}-${day}`;
-// }
 function excelSerialToDate(serial) {
   if (typeof serial !== "number" || isNaN(serial)) return null;
 
@@ -296,74 +271,6 @@ function parseExcelDate(value, metricName, pid) {
   );
   return null;
 }
-// function extractDate(row, headers, metricName) {
-//   let rawDate = null;
-
-//   if (metricName === "noi" || metricName === "pi" || metricName === "rti") {
-//     const key = headers.find((c) => c.toLowerCase().includes("installtime"));
-//     rawDate = key ? row[key] : null;
-//   } else if (metricName === "noe" || metricName === "pe") {
-//     const key = headers.find((c) => c.toLowerCase().includes("eventtime"));
-//     rawDate = key ? row[key] : null;
-//   } else if (metricName === "clicks") {
-//     const key = headers.find((c) => c.toLowerCase() === "date");
-//     rawDate = key ? row[key] : null;
-//   }
-
-//   if (!rawDate) {
-//     console.log(`⚠️ No date found for metric=${metricName}, row=`, row);
-//     return null;
-//   }
-
-//   // Handle string formats like "2025-09-14 15:53:15" or "2025-09-07"
-//   if (typeof rawDate === "string") {
-//     if (!rawDate) return null;
-
-//     let date;
-
-//     // Case 1: already in YYYY-MM-DD or YYYY-MM-DD HH:mm:ss
-//     if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
-//       date = new Date(rawDate);
-//     }
-//     // Case 2: format like DD/MM/YYYY HH:mm or DD/MM/YY
-//     else if (/^\d{2}\/\d{2}\/\d{2,4}/.test(rawDate)) {
-//       const parts = rawDate.split(/[\/\s:]/); // split by / space :
-//       let [day, month, year] = parts;
-
-//       // handle 2-digit year
-//       if (year.length === 2) {
-//         year = "20" + year;
-//       }
-
-//       date = new Date(`${year}-${month}-${day}`);
-//     }
-
-//     if (isNaN(date)) {
-//       return null; // fallback if not parsable
-//     }
-
-//     // Always return YYYY-MM-DD
-//     return date.toISOString().split("T")[0];
-//   }
-
-//   // Fallback: if Excel parser gave a Date object
-//   const d = new Date(rawDate);
-//   if (isNaN(d)) {
-//     console.log(
-//       `⚠️ Invalid date format metric=${metricName}, value=${rawDate}`
-//     );
-//     return null;
-//   }
-
-//   const formatted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
-//     2,
-//     "0"
-//   )}-${String(d.getDate()).padStart(2, "0")}`;
-//   console.log(
-//     `📅 Extracted date=${formatted} (from Date object) for metric=${metricName}, raw=${rawDate}`
-//   );
-//   return formatted;
-// }
 
 function extractDate(row, headers, metricName) {
   let rawDate = null;
@@ -694,58 +601,6 @@ const handleUpload = async (req, res) => {
           return;
         }
 
-        //       if (metricName === "clicks") {
-        //         // normal clicks
-        //         const clicksKey = headers.find((c) => /clicks?/i.test(c));
-        //         const clicksVal = clicksKey
-        //           ? Number((row[clicksKey] || "").toString().replace(/,/g, "")) || 0
-        //           : 0;
-        //         incIfPidDate(metricCounts.clicks, pid, metricsDate, clicksVal);
-
-        //         // fallback NOI if installs file missing
-        //         if (!uploadedMetricNames.has("noi")) {
-        //           const noiKey = headers.find((c) =>
-        //             /installsappsflyer/i.test(c)
-        //           );
-        //           if (noiKey) {
-        //             const noiVal = Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0;
-        //             incIfPidDate(metricCounts.noi, pid, metricsDate, noiVal);
-        //             // console.log(`📊 [Fallback NOI] PID=${pid}, date=${metricsDate}, val=${noiVal}`);
-        //           }
-        //         }
-        //          // Normalize headers (lowercase, remove spaces/dashes/underscores)
-        // const normalize = (str) =>
-        //   str.toLowerCase().replace(/[\s\-_]/g, "");
-
-        // const normHeaders = headers.map((h) => normalize(h));
-
-        //                 // ✅ Fallback NOE (unique-users ltv days cumulative appsflyer)
-        // if (!uploaded.some((f) => f.originalname.toLowerCase().includes("in-app-event"))) {
-        //   const idx = normHeaders.findIndex((h) =>
-        //     h.includes("uniqueusersltvdayscumulativeappsflyer")
-        //   );
-        //   if (idx !== -1) {
-        //     const noeKey = headers[idx];
-        //     const noeVal =
-        //       Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
-        //     if (noeVal > 0) {
-        //       incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
-        //       console.log(
-        //         `📊 [Fallback NOE] PID=${pid}, date=${metricsDate}, key=${noeKey}, value=${noeVal}`
-        //       );
-        //     } else {
-        //       console.log(
-        //         `⚠️ NOE fallback header found (${noeKey}) but value empty for PID=${pid}`
-        //       );
-        //     }
-        //   } else {
-        //     console.log("❌ No NOE fallback header found in clicks file");
-        //   }
-        // }
-
-        //         return;
-        //       }
-
         if (metricName === "noi") {
           // Use Media Source + Install Time
           const mediaSourceKey = headers.find((c) => /media\s*source/i.test(c));
@@ -788,79 +643,6 @@ const handleUpload = async (req, res) => {
           incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
           return;
         }
-        // if (metricName === "pe" || metricName === "noe") {
-        //   // Find event time column
-        //   const dateKey = headers.find((c) => /event[_\s]?time/i.test(c));
-        //   let rawDate = dateKey ? row[dateKey] : null;
-
-        //   // Normalize to YYYY-MM-DD
-        //   const metricsDate = normalizeDateRaw(rawDate);
-        //   if (!metricsDate) return; // skip if invalid
-
-        //   // Find event name and count
-        //   const evKey = headers.find((c) => /event[_\s]?name/i.test(c));
-        //   const countKey =
-        //     headers.find((c) => /event[_\s]?count/i.test(c)) ||
-        //     headers.find((c) => /uniqueusers/i.test(c));
-
-        //   if (!eventCountsByPidDate.has(pid)) eventCountsByPidDate.set(pid, new Map());
-        //   const pidDateMap = eventCountsByPidDate.get(pid);
-        //   const dateMap = pidDateMap.get(metricsDate) || new Map();
-
-        //   if (evKey) {
-        //     const ev = String(row[evKey] || "").trim().toLowerCase();
-        //     const evCount = countKey
-        //       ? Number((row[countKey] || "").toString().replace(/,/g, "")) || 0
-        //       : 1;
-
-        //     dateMap.set(ev, (dateMap.get(ev) || 0) + evCount);
-        //     incIfPidDate(metricCounts[metricName], pid, metricsDate, evCount);
-
-        //     console.log(
-        //       `📊 [${metricName.toUpperCase()}] PID=${pid}, date=${metricsDate}, event=${ev}, count=${evCount}`
-        //     );
-        //   }
-
-        //   pidDateMap.set(metricsDate, dateMap);
-        //   return;
-        // }
-
-        // if (metricName === "pe" || metricName === "noe") {
-        //      // Find event time column
-        //   const dateKey = headers.find((c) => /event[_\s]?time/i.test(c));
-        //   let rawDate = dateKey ? row[dateKey] : null;
-
-        //   // Normalize to YYYY-MM-DD
-        //   const metricsDate = normalizeDateRaw(rawDate);
-        //   if (!metricsDate) return; // skip if invalid
-
-        //   // Find event name and count
-        //   const evKey = headers.find((c) => /event[_\s]?name/i.test(c));
-        //   const countKey =
-        //     headers.find((c) => /event[_\s]?count/i.test(c)) ||
-        //     headers.find((c) => /uniqueusers/i.test(c));
-
-        //   if (!eventCountsByPidDate.has(pid)) eventCountsByPidDate.set(pid, new Map());
-        //   const pidDateMap = eventCountsByPidDate.get(pid);
-        //   const dateMap = pidDateMap.get(metricsDate) || new Map();
-
-        //   if (evKey) {
-        //     const ev = String(row[evKey] || "").trim().toLowerCase();
-        //     const evCount = countKey
-        //       ? Number((row[countKey] || "").toString().replace(/,/g, "")) || 0
-        //       : 1; // fallback
-
-        //     dateMap.set(ev, (dateMap.get(ev) || 0) + evCount);
-        //     incIfPidDate(metricCounts[metricName], pid, metricsDate, evCount);
-
-        //     console.log(
-        //       `📊 [${metricName.toUpperCase()}] PID=${pid}, date=${metricsDate}, event=${ev}, count=${evCount}`
-        //     );
-        //   }
-
-        //   pidDateMap.set(metricsDate, dateMap);
-        //   return;
-        // }
 
         // default
         incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
@@ -967,10 +749,23 @@ const handleUpload = async (req, res) => {
       `;
       await batchInsert(sqlEvents, eventData, 500);
     }
-
+    // Log before emitting
+    console.log("🔔 Emitting uploadComplete event for:", req.body.campaignName);
+    // After inserting into DB
+    const io = req.app.get("io"); // <-- get socket.io instance
+    io.emit("uploadComplete", {
+      status: "success", // ✅ explicitly send success
+      message: "Upload successful", // optional text message
+      campaignName: campaignName,
+      rowsInserted: metricsData.length,
+    });
+    console.log("✅ Event emitted!");
     res
       .status(200)
       .json({ msg: "Upload successful", rowsInserted: metricsData.length });
+    // res
+    //   .status(200)
+    //   .json({ msg: "Upload successful", rowsInserted: metricsData.length });
   } catch (err) {
     console.error("❌ Error in handleUpload:", err);
     res.status(500).json({ msg: "Server error", error: err.message });
