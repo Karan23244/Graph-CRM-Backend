@@ -680,8 +680,10 @@ const handleUpload = async (req, res) => {
         }
       }
 
-      // If no dates found for this pid, skip
-      if (allDates.size === 0) continue;
+      // If no dates found, still insert one zero row for startDate (baseline)
+      if (allDates.size === 0) {
+        allDates.add(startDate); // ensures pid stored even with 0 data
+      }
 
       // loop through all dates for this pid
       for (const date of allDates) {
