@@ -391,7 +391,7 @@ async function getAdvDataFromDB(campaignName, startDate, endDate, os) {
 // ---------------------------
 const handleUpload = async (req, res) => {
   try {
-    const { campaignName, os, geo, dateRange } = req.body;
+    const { campaignName, os, geo, dateRange, socketId } = req.body;
     const fullCampaignName = campaignName;
     const baseCampaignName = campaignName.split(",")[0];
 
@@ -749,17 +749,19 @@ const handleUpload = async (req, res) => {
       `;
       await batchInsert(sqlEvents, eventData, 500);
     }
-    // Log before emitting
-    console.log("🔔 Emitting uploadComplete event for:", req.body.campaignName);
     // After inserting into DB
     const io = req.app.get("io"); // <-- get socket.io instance
-    io.emit("uploadComplete", {
-      status: "success", // ✅ explicitly send success
-      message: "Upload successful", // optional text message
-      campaignName: campaignName,
-      rowsInserted: metricsData.length,
-    });
-    console.log("✅ Event emitted!");
+    if (socketId && io.sockets.sockets.get(socketId)) {
+      io.to(socketId).emit("uploadComplete", {
+        status: "success",
+        message: "Upload successful",
+        campaignName,
+        rowsInserted: metricsData.length,
+      });
+      console.log("✅ Emitted uploadComplete to:", socketId);
+    } else {
+      console.log("⚠️ Socket not connected or invalid:", socketId);
+    }
     res
       .status(200)
       .json({ msg: "Upload successful", rowsInserted: metricsData.length });

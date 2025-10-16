@@ -10,22 +10,21 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 const { Server } = require("socket.io");
-// initialize socket.io
+// ✅ Create Socket.IO server
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: [
+      "http://localhost:5173",
+      "https://clickorbits.in",
+      "https://gapi.clickorbits.in",
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
   },
 });
-// make io available globally
-app.set("io", io);
-// ✅ Connection and disconnection logs
-io.on("connection", (socket) => {
-  console.log(`🟢 Socket connected: ${socket.id}`);
 
-  socket.on("disconnect", (reason) => {
-    console.log(`🔴 Socket disconnected: ${socket.id} (Reason: ${reason})`);
-  });
-});
+// ✅ Attach `io` to the app BEFORE routes
+app.set("io", io);
 // app.use(cors());
 // app.use(express.json());
 
