@@ -416,6 +416,24 @@ const handleUpload = async (req, res) => {
       endDate,
       os
     );
+    // ✅ Step 2: Fetch adv_data from 30 days before startDate
+    const prev30Start = new Date(startDate);
+    prev30Start.setDate(prev30Start.getDate() - 30);
+    const prev30Str = prev30Start.toISOString().split("T")[0];
+    console.log(
+      `📅 Fetching additional adv_data from ${prev30Str} to ${startDate} (30 days before)`
+    );
+    const advDataPrev30 = await getAdvDataFromDB(
+      baseCampaignName,
+      prev30Str,
+      startDate,
+      os
+    );
+    // ✅ Step 3: Create a map of all advData by PID
+    const advPidMap = new Map();
+    for (const d of advData) advPidMap.set(d.pidLower, d);
+    // ✅ Step 4: Collect all PIDs that appear in uploaded files
+    const filePids = new Set();
     if (!advData.length)
       return res
         .status(400)
@@ -479,7 +497,8 @@ const handleUpload = async (req, res) => {
         const sourceVal = mediaSourceKey ? row[mediaSourceKey] : null;
         if (!sourceVal) return;
         const pid = String(sourceVal).trim().toLowerCase();
-
+        // ✅ Add this line here
+        filePids.add(pid);
         const metricsDate = extractDate(row, headers, metricName);
         if (!metricsDate) return;
 
@@ -648,6 +667,36 @@ const handleUpload = async (req, res) => {
         incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
       });
     }
+    // ✅ Step 5: Merge 30-day advData only for PIDs that exist in uploaded files
+    const mergedAdvData = [...advData];
+    for (const prev of advDataPrev30) {
+      if (filePids.has(prev.pidLower) && !advPidMap.has(prev.pidLower)) {
+        mergedAdvData.push(prev);
+        advPidMap.set(prev.pidLower, prev);
+      }
+    }
+
+    // ✅ Step 6: Add placeholder "N/A" entries for PIDs present in files but missing in both adv_data sets
+    for (const pid of filePids) {
+      if (!advPidMap.has(pid)) {
+        mergedAdvData.push({
+          pid,
+          pidLower: pid,
+          pubid: "N/A",
+          pubam: "N/A",
+          campaign_name: baseCampaignName,
+          pause: 0,
+          nocrm: 0,
+          os,
+        });
+      }
+    }
+
+    console.log(
+      `📊 Total adv_data combined (main + 30-day): ${mergedAdvData.length}`
+    );
+
+    // ✅ Use mergedAdvData instead of advData going forward
 
     // ... rest of your DB insert logic unchanged ...
 
@@ -659,7 +708,7 @@ const handleUpload = async (req, res) => {
     const metricsData = [];
     const eventData = [];
 
-    for (const d of advData) {
+    for (const d of mergedAdvData) {
       const pidLower = d.pidLower;
 
       // Collect all dates where this PID has any metric OR events
