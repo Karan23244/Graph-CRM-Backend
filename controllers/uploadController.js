@@ -807,6 +807,7 @@ const handleUpload = async (req, res) => {
         status: "success",
         message: "Upload successful",
         campaignName,
+        dateRange,
         rowsInserted: metricsData.length,
       });
       console.log("✅ Emitted uploadComplete to:", socketId);
