@@ -351,10 +351,11 @@ function extractDate(row, headers, metricName) {
 async function getAdvDataFromDB(campaignName, startDate, endDate, os) {
   const [rows] = await pool.query(
     `SELECT pid, pub_id, pub_name, campaign_name, paused_date, flag, os
-     FROM adv_data
-     WHERE campaign_name = ?
-       AND shared_date BETWEEN ? AND ?
-       AND os = ?`,
+FROM adv_data
+WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(13), '') =
+      REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
+  AND DATE(shared_date) BETWEEN ? AND ?
+  AND os = ?;`,
     [campaignName, startDate, endDate, os]
   );
 

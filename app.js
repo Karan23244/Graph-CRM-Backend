@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const uploadRoutes = require("./routes/uploadRoutes");
+const adjustuploadRoutes = require("./routes/adjustUploadRoutes");
 const campaignRoutes = require("./routes/campaignRoutes");
 const router = express.Router();
 const http = require("http");
@@ -17,6 +18,7 @@ const io = new Server(server, {
       "http://localhost:5173",
       "https://clickorbits.in",
       "https://gapi.clickorbits.in",
+      "https://pidmetric.com",
     ],
     methods: ["GET", "POST"],
     credentials: true,
@@ -25,8 +27,8 @@ const io = new Server(server, {
 
 // ✅ Attach `io` to the app BEFORE routes
 app.set("io", io);
-app.use(cors());
-app.use(express.json());
+// app.use(cors());
+// app.use(express.json());
 
 //  ^|^e CORS FIRST
 
@@ -37,6 +39,7 @@ app.use(express.urlencoded({ limit: "500mb", extended: true }));
 //  ^|^e Routes
 app.use("/api", uploadRoutes);
 app.use("/api", campaignRoutes);
+app.use("/api", adjustuploadRoutes);
 
 // Helper: fetch campaign conditions; if not present, fall back to __DEFAULT__
 app.get("/api/zone-conditions/:campaign", async (req, res) => {

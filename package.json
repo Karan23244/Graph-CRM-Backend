@@ -12,9 +12,11 @@
   "type": "commonjs",
   "dependencies": {
     "cors": "^2.8.5",
+    "detect-csv": "^1.1.0",
     "dotenv": "^17.2.1",
     "exceljs": "^4.4.0",
     "express": "^5.1.0",
+    "iconv-lite": "^0.7.0",
     "jszip": "^3.10.1",
     "multer": "^2.0.2",
     "mysql2": "^3.14.3",
