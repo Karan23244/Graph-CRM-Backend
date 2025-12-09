@@ -17,7 +17,7 @@ const io = new Server(server, {
     origin: [
       "http://localhost:5173",
       "https://clickorbits.in",
-      "https://gapi.clickorbits.in",
+      "https://gapi.pidmetric.com",
       "https://pidmetric.com",
     ],
     methods: ["GET", "POST"],
@@ -185,6 +185,23 @@ app.post("/api/zone-conditions/:campaign/set-ignores", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "DB error" });
   }
+});
+// ⬇⬇⬇ ADD THIS BLOCK HERE ⬇⬇⬇
+
+io.on("connection", (socket) => {
+  console.log("🔥 New socket connected:", socket.id);
+
+  socket.on("joinRoom", (roomId) => {
+    socket.join(roomId);
+    console.log(`🏠 User joined room: ${roomId}`);
+
+    // 🔥 TEST EMIT — send message immediately after joining
+    io.to(roomId).emit("testEvent", `Hello user ${roomId}, backend connected!`);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("❌ Socket disconnected:", socket.id);
+  });
 });
 
 const PORT = process.env.PORT || 2001;

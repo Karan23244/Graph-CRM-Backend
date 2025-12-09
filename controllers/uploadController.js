@@ -393,6 +393,7 @@ WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(1
 const handleUpload = async (req, res) => {
   try {
     const { campaignName, os, geo, dateRange, socketId } = req.body;
+    console.log(socketId);
     const fullCampaignName = campaignName;
     const baseCampaignName = campaignName.split(",")[0];
 
@@ -801,9 +802,9 @@ const handleUpload = async (req, res) => {
       `;
       await batchInsert(sqlEvents, eventData, 500);
     }
-    // After inserting into DB
-    const io = req.app.get("io"); // <-- get socket.io instance
-    if (socketId && io.sockets.sockets.get(socketId)) {
+    // Emit socket event if socketId provided
+    const io = req.app.get("io");
+    if (socketId && io && io.sockets && io.sockets.sockets.get(socketId)) {
       io.to(socketId).emit("uploadComplete", {
         status: "success",
         message: "Upload successful",
@@ -815,6 +816,7 @@ const handleUpload = async (req, res) => {
     } else {
       console.log("⚠️ Socket not connected or invalid:", socketId);
     }
+
     res
       .status(200)
       .json({ msg: "Upload successful", rowsInserted: metricsData.length });

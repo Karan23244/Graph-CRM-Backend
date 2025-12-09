@@ -720,7 +720,7 @@ const handleAdjustUpload = async (req, res) => {
     // Emit socket event if socketId provided
     const io = req.app.get("io");
     if (socketId && io && io.sockets && io.sockets.sockets.get(socketId)) {
-      io.to(socketId).emit("uploadComplete", {
+      io.to(socketId).emit("uploadAdjustComplete", {
         status: "success",
         message: "Upload successful",
         campaignName,
