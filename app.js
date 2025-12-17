@@ -3,6 +3,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const uploadRoutes = require("./routes/uploadRoutes");
 const adjustuploadRoutes = require("./routes/adjustUploadRoutes");
+const singularuploadRoutes = require("./routes/singularUploadRoutes");
 const campaignRoutes = require("./routes/campaignRoutes");
 const router = express.Router();
 const http = require("http");
@@ -40,6 +41,7 @@ app.use(express.urlencoded({ limit: "500mb", extended: true }));
 app.use("/api", uploadRoutes);
 app.use("/api", campaignRoutes);
 app.use("/api", adjustuploadRoutes);
+app.use("/api", singularuploadRoutes);
 
 // Helper: fetch campaign conditions; if not present, fall back to __DEFAULT__
 app.get("/api/zone-conditions/:campaign", async (req, res) => {
