@@ -603,18 +603,29 @@ const handleUpload = async (req, res) => {
             }
           }
 
-          // ---- Fallback NOE (if in-app-event file not uploaded, get from unique-users... column in clicks) ----
+          // ---- Fallback NOE: SUM all columns starting with
+          // "uniqueusersltvdayscumulativeappsflyer"
+          // ----
           if (!uploadedMetricNames.has("noe")) {
-            const noeIdx = normHeaders.findIndex((c) =>
-              c.includes("uniqueusersltvdayscumulativeappsflyer")
-            );
-            if (noeIdx !== -1) {
-              const noeKey = headers[noeIdx];
-              const noeVal =
-                Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
-              incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
+            let noeSum = 0;
+
+            normHeaders.forEach((normHeader, idx) => {
+              if (
+                normHeader.startsWith("uniqueusersltvdayscumulativeappsflyer")
+              ) {
+                const originalKey = headers[idx];
+                const val =
+                  Number(
+                    (row[originalKey] || "").toString().replace(/,/g, "")
+                  ) || 0;
+                noeSum += val;
+              }
+            });
+
+            if (noeSum > 0) {
+              incIfPidDate(metricCounts.noe, pid, metricsDate, noeSum);
               console.log(
-                `📊 [Fallback NOE] PID=${pid}, date=${metricsDate}, val=${noeVal}`
+                `📊 [Fallback NOE SUM] PID=${pid}, date=${metricsDate}, noe=${noeSum}`
               );
             }
           }
