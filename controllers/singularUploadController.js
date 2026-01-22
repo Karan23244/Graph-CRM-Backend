@@ -48,7 +48,7 @@ async function streamXlsxRows(filePath, onRow) {
     const headers = headerRow.values
       .slice(1)
       .map((h) =>
-        h ? h.toString().trim().toLowerCase().replace(/\s+/g, "") : ""
+        h ? h.toString().trim().toLowerCase().replace(/\s+/g, "") : "",
       );
     console.log("Processed Headers:", headers);
     // read data rows
@@ -181,7 +181,7 @@ WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(1
       REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
   AND DATE(shared_date) BETWEEN ? AND ?
   AND os = ?;`,
-    [campaignName, startDate, endDate, os]
+    [campaignName, startDate, endDate, os],
   );
 
   const pidMap = new Map();
@@ -236,7 +236,7 @@ const handlesingularUpload = async (req, res) => {
       baseCampaignName,
       startDate,
       endDate,
-      os
+      os,
     );
 
     // fetch additional 30-days before (same as your previous logic)
@@ -244,13 +244,13 @@ const handlesingularUpload = async (req, res) => {
     prev30Start.setDate(prev30Start.getDate() - 30);
     const prev30Str = prev30Start.toISOString().split("T")[0];
     console.log(
-      `📅 Fetching additional adv_data from ${prev30Str} to ${startDate} (30 days before)`
+      `📅 Fetching additional adv_data from ${prev30Str} to ${startDate} (30 days before)`,
     );
     const advDataPrev30 = await getAdvDataFromDB(
       baseCampaignName,
       prev30Str,
       startDate,
-      os
+      os,
     );
 
     // Build advPidMap from advData
@@ -278,34 +278,67 @@ const handlesingularUpload = async (req, res) => {
     };
 
     // Helper: parse date from various formats. Returns YYYY-MM-DD or null
+    // const parseDateToISO = (raw) => {
+    //   if (!raw && raw !== 0) return null;
+    //   raw = String(raw).trim();
+    //   // common formats: dd/mm/yyyy or yyyy-mm-dd or dd-mm-yyyy
+    //   // try dd/mm/yyyy
+    //   const dmy = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    //   if (dmy) {
+    //     const dd = dmy[1].padStart(2, "0");
+    //     const mm = dmy[2].padStart(2, "0");
+    //     const yyyy = dmy[3];
+    //     return `${yyyy}-${mm}-${dd}`;
+    //   }
+    //   // try ISO-like yyyy-mm-dd
+    //   const iso = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    //   if (iso) {
+    //     const yyyy = iso[1];
+    //     const mm = String(iso[2]).padStart(2, "0");
+    //     const dd = String(iso[3]).padStart(2, "0");
+    //     return `${yyyy}-${mm}-${dd}`;
+    //   }
+    //   // fallback try Date parse
+    //   const d = new Date(raw);
+    //   if (!isNaN(d)) {
+    //     const yyyy = d.getFullYear();
+    //     const mm = String(d.getMonth() + 1).padStart(2, "0");
+    //     const dd = String(d.getDate()).padStart(2, "0");
+    //     return `${yyyy}-${mm}-${dd}`;
+    //   }
+    //   return null;
+    // };
     const parseDateToISO = (raw) => {
-      if (!raw && raw !== 0) return null;
+      if (raw === null || raw === undefined || raw === "") return null;
+      console.log(raw)
+      // Excel serial
+      if (typeof raw === "number") {
+        const d = excelSerialToDate(raw);
+        return d.toISOString().split("T")[0];
+      }
+
       raw = String(raw).trim();
-      // common formats: dd/mm/yyyy or yyyy-mm-dd or dd-mm-yyyy
-      // try dd/mm/yyyy
-      const dmy = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-      if (dmy) {
-        const dd = dmy[1].padStart(2, "0");
-        const mm = dmy[2].padStart(2, "0");
-        const yyyy = dmy[3];
-        return `${yyyy}-${mm}-${dd}`;
+
+      // DD/MM/YYYY
+      let m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (m) {
+        return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
       }
-      // try ISO-like yyyy-mm-dd
-      const iso = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-      if (iso) {
-        const yyyy = iso[1];
-        const mm = String(iso[2]).padStart(2, "0");
-        const dd = String(iso[3]).padStart(2, "0");
-        return `${yyyy}-${mm}-${dd}`;
+
+      // DD/MM/YY  ← THIS is what Singular/Excel gives you
+      m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+      if (m) {
+        const yy = Number(m[3]);
+        const yyyy = yy <= 69 ? 2000 + yy : 1900 + yy;
+        return `${yyyy}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
       }
-      // fallback try Date parse
-      const d = new Date(raw);
-      if (!isNaN(d)) {
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        return `${yyyy}-${mm}-${dd}`;
+
+      // YYYY-MM-DD
+      m = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      if (m) {
+        return `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
       }
+
       return null;
     };
 
@@ -350,7 +383,7 @@ const handlesingularUpload = async (req, res) => {
               }
             }
           }
-          
+
           const extractPubId = (campaign) => {
             const m = String(campaign || "").match(/_(\d{2,})$/);
             return m ? m[1] : null;
@@ -392,7 +425,7 @@ const handlesingularUpload = async (req, res) => {
             const pubidFromCampaign = extractPubId(campaignVal);
             if (pubidFromCampaign) {
               advMatch = [...advPidMap.values()].find(
-                (d) => String(d.pubid) === pubidFromCampaign
+                (d) => String(d.pubid) === pubidFromCampaign,
               );
               if (advMatch) {
                 pid = advMatch.pidLower;
@@ -424,6 +457,8 @@ const handlesingularUpload = async (req, res) => {
 
           // Parse date
           let metricsDate = parseDateToISO(row[dateKey]);
+          console.log("RAW DATE:", row[dateKey], "→", metricsDate);
+
           if (!metricsDate) metricsDate = startDate;
 
           const parseNum = (v) => Number(String(v).replace(/,/g, "")) || 0;
@@ -455,7 +490,7 @@ const handlesingularUpload = async (req, res) => {
           });
 
           console.log(
-            `PID:${pid} DATE:${metricsDate} CLICKS:${clicks} INST:${installs} EVENT:${eventVal}`
+            `PID:${pid} DATE:${metricsDate} CLICKS:${clicks} INST:${installs} EVENT:${eventVal}`,
           );
 
           uploadedMetricNames.add("form_file");
@@ -473,7 +508,7 @@ const handlesingularUpload = async (req, res) => {
             .toLowerCase()
             .replace(/[\s\-_]/g, "");
         const sortedKeys = Object.keys(FILE_MAP || {}).sort(
-          (a, b) => b.length - a.length
+          (a, b) => b.length - a.length,
         );
         const fileNameNorm = normalize(file.originalname || "");
         const key = sortedKeys.find((k) => fileNameNorm.includes(normalize(k)));
@@ -487,7 +522,7 @@ const handlesingularUpload = async (req, res) => {
 
         // Try to find media source like old code:
         const mediaSourceKey = headers.find((c) =>
-          /media[-_\s]?source/i.test(c)
+          /media[-_\s]?source/i.test(c),
         );
         const sourceVal = mediaSourceKey ? row[mediaSourceKey] : null;
         if (!sourceVal) return;
@@ -512,7 +547,7 @@ const handlesingularUpload = async (req, res) => {
           const normHeaders = headersArr.map((h) => normalizeHeader(h));
 
           const clicksIdx = normHeaders.findIndex(
-            (c) => c === "clicks" || c === "click"
+            (c) => c === "clicks" || c === "click",
           );
           if (clicksIdx !== -1) {
             const clicksKey2 = headersArr[clicksIdx];
@@ -525,7 +560,7 @@ const handlesingularUpload = async (req, res) => {
 
           if (!uploadedMetricNames.has("noi")) {
             const noiIdx = normHeaders.findIndex((c) =>
-              c.includes("installsappsflyer")
+              c.includes("installsappsflyer"),
             );
             if (noiIdx !== -1) {
               const noiKey = headersArr[noiIdx];
@@ -537,7 +572,7 @@ const handlesingularUpload = async (req, res) => {
 
           if (!uploadedMetricNames.has("noe")) {
             const noeIdx = normHeaders.findIndex((c) =>
-              c.includes("uniqueusersltvdayscumulativeappsflyer")
+              c.includes("uniqueusersltvdayscumulativeappsflyer"),
             );
             if (noeIdx !== -1) {
               const noeKey = headersArr[noeIdx];
@@ -552,7 +587,7 @@ const handlesingularUpload = async (req, res) => {
 
         if (metricName === "noi") {
           const mediaSourceKey2 = headers.find((c) =>
-            /media\s*source/i.test(c)
+            /media\s*source/i.test(c),
           );
           const installTimeKey = headers.find((c) => /install\s*time/i.test(c));
           const pid2 = mediaSourceKey2
@@ -563,7 +598,7 @@ const handlesingularUpload = async (req, res) => {
           const dateVal = installTimeRaw ? new Date(installTimeRaw) : null;
           if (!dateVal || isNaN(dateVal)) return;
           const mDate = `${dateVal.getFullYear()}-${String(
-            dateVal.getMonth() + 1
+            dateVal.getMonth() + 1,
           ).padStart(2, "0")}-${String(dateVal.getDate()).padStart(2, "0")}`;
           incIfPidDate(metricCounts.noi, pid2, mDate, 1);
           return;
@@ -621,7 +656,7 @@ const handlesingularUpload = async (req, res) => {
     }
 
     console.log(
-      `📊 Total adv_data combined (main + 30-day): ${mergedAdvData.length}`
+      `📊 Total adv_data combined (main + 30-day): ${mergedAdvData.length}`,
     );
 
     // Prepare DB inserts (per pid + date)
