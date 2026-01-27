@@ -618,17 +618,17 @@ app.post("/api/billing/data", async (req, res) => {
   }
 });
 
-// Daily at 1 AM
-cron.schedule("0 1 * * *", async () => {
-  console.log("🔔 Notification cron started");
+// // Daily at 1 AM
+// cron.schedule("0 1 * * *", async () => {
+//   console.log("🔔 Notification cron started");
 
-  try {
-    const result = await runNotificationJob({ dryRun: false });
-    console.log("✅ Notifications sent:", result.summary);
-  } catch (err) {
-    console.error("❌ Notification cron error:", err);
-  }
-});
+//   try {
+//     const result = await runNotificationJob({ dryRun: false });
+//     console.log("✅ Notifications sent:", result.summary);
+//   } catch (err) {
+//     console.error("❌ Notification cron error:", err);
+//   }
+// });
 const PORT = process.env.PORT || 2001;
 server.listen(PORT, () => {
   console.log(`🚀 Server + Socket.IO running on http://localhost:${PORT}`);
