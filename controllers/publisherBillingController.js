@@ -30,7 +30,7 @@ exports.getPublisherBillingData = async (req, res) => {
 
           b.adv_total_number,
           b.pub_apno,
-          (b.pub_apno * b.pub_payout) AS payout_amount,
+         ROUND((b.pub_apno * b.pub_payout), 2) AS payout_amount,
 
           p.pid,
           p.adv_total_number AS pid_total,
@@ -88,7 +88,7 @@ exports.getPublisherBillingData = async (req, res) => {
           payable_event,
           CAST(pay_out AS DECIMAL(10,2)) AS pub_payout,
           SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS adv_total_number,
-          SUM(NULLIF(CAST(pub_Apno AS DECIMAL(12,2)), 0)) AS pub_apno
+          SUM(CAST(pub_Apno AS DECIMAL(12,2))) AS pub_apno
         FROM adv_data
         WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
         GROUP BY campaign_name, geo, payable_event, pub_payout
@@ -102,7 +102,7 @@ exports.getPublisherBillingData = async (req, res) => {
         campaign_name, geo, os, payable_event, pid,
         CAST(pay_out AS DECIMAL(10,2)) AS pub_payout,
         SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS adv_total_number,
-        SUM(NULLIF(CAST(pub_Apno AS DECIMAL(12,2)), 0)) AS pub_apno
+        SUM(CAST(pub_Apno AS DECIMAL(12,2))) AS pub_apno
         FROM adv_data
         WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
         GROUP BY campaign_name, geo, os, payable_event, pub_payout, pid

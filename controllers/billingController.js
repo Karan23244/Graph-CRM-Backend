@@ -6,7 +6,7 @@ const { normalizeRole, getSubAdminIds } = require("../helpers/billinghelpers");
 exports.getBillingDropdowns = async (req, res) => {
   try {
     let { roles, user_id } = req.body;
-
+    console.log("Billing Dropdown Request:", { roles, user_id });
     // Ensure roles is always an array
     if (!Array.isArray(roles)) {
       roles = [roles];
