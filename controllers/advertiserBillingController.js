@@ -88,8 +88,11 @@ exports.getAdvertiserBillingData = async (req, res) => {
             total_no: r.pid_total_no,
             deductions: r.pid_deductions,
             approved_no: r.pid_approved_no,
-            payout_amount:
-              Number(r.pid_approved_no || 0) * Number(r.adv_payout || 0),
+            payout_amount: Number(
+              (
+                Number(r.pid_approved_no || 0) * Number(r.adv_payout || 0)
+              ).toFixed(2),
+            ),
           });
         }
       }
@@ -109,10 +112,9 @@ exports.getAdvertiserBillingData = async (req, res) => {
           GROUP_CONCAT(DISTINCT TRIM(os)) AS os,
           payable_event,
           CAST(adv_payout AS DECIMAL(10,2)) AS adv_payout,
-
-          SUM(CAST(adv_total_no AS UNSIGNED)) AS total_no,
-          SUM(CAST(adv_deductions AS UNSIGNED)) AS deductions,
-          SUM(CAST(adv_approved_no AS UNSIGNED)) AS approved_no
+          SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS total_no,
+          SUM(CAST(adv_deductions AS DECIMAL(12,2))) AS deductions,
+          SUM(CAST(adv_approved_no AS DECIMAL(12,2))) AS approved_no
 
         FROM adv_data
         WHERE adv_id = ?
@@ -133,9 +135,9 @@ exports.getAdvertiserBillingData = async (req, res) => {
           pid,
           CAST(adv_payout AS DECIMAL(10,2)) AS adv_payout,
 
-          SUM(CAST(adv_total_no AS UNSIGNED)) AS total_no,
-          SUM(CAST(adv_deductions AS UNSIGNED)) AS deductions,
-          SUM(CAST(adv_approved_no AS UNSIGNED)) AS approved_no
+           SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS total_no,
+           SUM(CAST(adv_deductions AS DECIMAL(12,2))) AS deductions,
+           SUM(CAST(adv_approved_no AS DECIMAL(12,2))) AS approved_no
 
         FROM adv_data
         WHERE adv_id = ?
@@ -148,12 +150,16 @@ exports.getAdvertiserBillingData = async (req, res) => {
 
       data = summary.map((s) => ({
         ...s,
-        payout_amount: Number(s.approved_no || 0) * Number(s.adv_payout || 0),
+        payout_amount: Number(
+          (Number(s.approved_no || 0) * Number(s.adv_payout || 0)).toFixed(2),
+        ),
         pid_data: pidRows
           .filter(
             (p) =>
               p.campaign_name === s.campaign_name &&
               p.geo === s.geo &&
+              p.payable_event === s.payable_event &&
+              s.os.split(",").includes(p.os) &&
               Number(p.adv_payout) === Number(s.adv_payout),
           )
           .map((p) => ({
@@ -161,8 +167,11 @@ exports.getAdvertiserBillingData = async (req, res) => {
             total_no: p.total_no,
             deductions: p.deductions,
             approved_no: p.approved_no,
-            payout_amount:
-              Number(p.approved_no || 0) * Number(p.adv_payout || 0),
+            payout_amount: Number(
+              (Number(p.approved_no || 0) * Number(p.adv_payout || 0)).toFixed(
+                2,
+              ),
+            ),
           })),
       }));
     }
@@ -180,6 +189,12 @@ exports.getAdvertiserBillingData = async (req, res) => {
       },
       { total_no: 0, deductions: 0, approved_no: 0, payout: 0 },
     );
+
+    // round AFTER reduce (safe)
+    totals.total_no = Number(totals.total_no.toFixed(2));
+    totals.deductions = Number(totals.deductions.toFixed(2));
+    totals.approved_no = Number(totals.approved_no.toFixed(2));
+    totals.payout = Number(totals.payout.toFixed(2));
 
     res.json({
       source: exists ? "snapshot" : "live",

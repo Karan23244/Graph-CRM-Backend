@@ -67,7 +67,9 @@ exports.getPublisherBillingData = async (req, res) => {
             pid: r.pid,
             adv_total_number: r.pid_total,
             pub_apno: r.pid_apno,
-            payout_amount: Number(r.pid_apno || 0) * Number(r.pub_payout),
+            payout_amount: Number(
+              (Number(r.pid_apno || 0) * Number(r.pub_payout || 0)).toFixed(2),
+            ),
           });
         }
       }
@@ -85,8 +87,8 @@ exports.getPublisherBillingData = async (req, res) => {
           GROUP_CONCAT(DISTINCT os) AS os,
           payable_event,
           CAST(pay_out AS DECIMAL(10,2)) AS pub_payout,
-          SUM(CAST(adv_total_no AS UNSIGNED)) AS adv_total_number,
-          SUM(NULLIF(CAST(pub_Apno AS UNSIGNED), 0)) AS pub_apno
+          SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS adv_total_number,
+          SUM(NULLIF(CAST(pub_Apno AS DECIMAL(12,2)), 0)) AS pub_apno
         FROM adv_data
         WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
         GROUP BY campaign_name, geo, payable_event, pub_payout
@@ -95,12 +97,12 @@ exports.getPublisherBillingData = async (req, res) => {
       );
 
       const [pidRows] = await pool.query(
-        `
-        SELECT
-          campaign_name, geo, os, payable_event, pid,
-          CAST(pay_out AS DECIMAL(10,2)) AS pub_payout,
-          SUM(CAST(adv_total_no AS UNSIGNED)) AS adv_total_number,
-       SUM(NULLIF(CAST(pub_Apno AS UNSIGNED), 0)) AS pub_apno
+        ` 
+        SELECT      
+        campaign_name, geo, os, payable_event, pid,
+        CAST(pay_out AS DECIMAL(10,2)) AS pub_payout,
+        SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS adv_total_number,
+        SUM(NULLIF(CAST(pub_Apno AS DECIMAL(12,2)), 0)) AS pub_apno
         FROM adv_data
         WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
         GROUP BY campaign_name, geo, os, payable_event, pub_payout, pid
@@ -113,12 +115,19 @@ exports.getPublisherBillingData = async (req, res) => {
         payout_amount:
           s.pub_apno === null
             ? null
-            : Number(s.pub_apno) * Number(s.pub_payout),
+            : Number(
+                (Number(s.pub_apno || 0) * Number(s.pub_payout || 0)).toFixed(
+                  2,
+                ),
+              ),
         pid_data: pidRows
           .filter(
             (p) =>
               p.campaign_name === s.campaign_name &&
               p.geo === s.geo &&
+              p.payable_event === s.payable_event &&
+              p.os &&
+              s.os.includes(p.os) &&
               Number(p.pub_payout) === Number(s.pub_payout),
           )
           .map((p) => ({
@@ -128,7 +137,11 @@ exports.getPublisherBillingData = async (req, res) => {
             payout_amount:
               p.pub_apno === null
                 ? null
-                : Number(p.pub_apno) * Number(p.pub_payout),
+                : Number(
+                    (
+                      Number(p.pub_apno || 0) * Number(p.pub_payout || 0)
+                    ).toFixed(2),
+                  ),
           })),
       }));
     }
@@ -143,6 +156,11 @@ exports.getPublisherBillingData = async (req, res) => {
       },
       { adv_total_number: 0, pub_apno: 0, payout: 0 },
     );
+
+    // round AFTER reduce (very important)
+    totals.adv_total_number = Number(totals.adv_total_number.toFixed(2));
+    totals.pub_apno = Number(totals.pub_apno.toFixed(2));
+    totals.payout = Number(totals.payout.toFixed(2));
 
     res.json({
       source: exists ? "snapshot" : "live",
