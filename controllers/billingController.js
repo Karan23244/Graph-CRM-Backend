@@ -92,28 +92,45 @@ exports.getBillingDropdowns = async (req, res) => {
      * =====================
      */
     if (isAdvertiserManager) {
+      const conditions = [];
+      const params = [];
+
+      // Created by manager or subadmins
+      conditions.push(`user_id IN (?)`);
+      params.push(userIds);
+
+      // Assigned to manager or subadmins
+      userIds.forEach((id) => {
+        conditions.push(`FIND_IN_SET(?, assign_id)`);
+        params.push(id);
+      });
+
       const [rows] = await pool.query(
         `
-        SELECT DISTINCT adv_id, adv_name
-        FROM advids
-        WHERE user_id IN (?)
-        ORDER BY adv_name
-        `,
-        [userIds],
+    SELECT DISTINCT adv_id, adv_name
+    FROM advids
+    WHERE ${conditions.join(" OR ")}
+    ORDER BY adv_name
+    `,
+        params,
       );
+
       advertisers.push(...rows);
     }
 
     if (isAdvertiser) {
       const [rows] = await pool.query(
         `
-        SELECT adv_id, adv_name
-        FROM advids
-        WHERE user_id = ?
-        ORDER BY adv_name
-        `,
-        [user_id],
+    SELECT DISTINCT adv_id, adv_name
+    FROM advids
+    WHERE 
+      user_id = ?
+      OR FIND_IN_SET(?, assign_id)
+    ORDER BY adv_name
+    `,
+        [user_id, user_id],
       );
+
       advertisers.push(...rows);
     }
 

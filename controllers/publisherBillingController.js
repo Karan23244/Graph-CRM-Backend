@@ -23,6 +23,7 @@ exports.getPublisherBillingData = async (req, res) => {
           b.id AS billing_id,
            b.status, 
           b.campaign_name,
+          b.vertical,
           b.geo,
           b.os,
           b.payable_event,
@@ -33,6 +34,7 @@ exports.getPublisherBillingData = async (req, res) => {
          ROUND((b.pub_apno * b.pub_payout), 2) AS payout_amount,
 
           p.pid,
+          p.os AS pid_os,
           p.adv_total_number AS pid_total,
           p.pub_apno AS pid_apno
         FROM publisher_billing b
@@ -51,6 +53,7 @@ exports.getPublisherBillingData = async (req, res) => {
             billing_id: r.billing_id,
             status: r.status,
             campaign_name: r.campaign_name,
+            vertical: r.vertical,
             geo: r.geo,
             os: r.os,
             payable_event: r.payable_event,
@@ -65,6 +68,7 @@ exports.getPublisherBillingData = async (req, res) => {
         if (r.pid) {
           map[r.billing_id].pid_data.push({
             pid: r.pid,
+            os: r.pid_os,
             adv_total_number: r.pid_total,
             pub_apno: r.pid_apno,
             payout_amount: Number(
@@ -84,6 +88,7 @@ exports.getPublisherBillingData = async (req, res) => {
         SELECT
           campaign_name,
           geo,
+          vertical,
           GROUP_CONCAT(DISTINCT os) AS os,
           payable_event,
           CAST(pay_out AS DECIMAL(10,2)) AS pub_payout,
@@ -91,7 +96,7 @@ exports.getPublisherBillingData = async (req, res) => {
           SUM(CAST(pub_Apno AS DECIMAL(12,2))) AS pub_apno
         FROM adv_data
         WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
-        GROUP BY campaign_name, geo, payable_event, pub_payout
+        GROUP BY campaign_name, geo,vertical, payable_event, pub_payout
         `,
         [pub_id, month],
       );
@@ -100,12 +105,13 @@ exports.getPublisherBillingData = async (req, res) => {
         ` 
         SELECT      
         campaign_name, geo, os, payable_event, pid,
+        vertical,
         CAST(pay_out AS DECIMAL(10,2)) AS pub_payout,
         SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS adv_total_number,
         SUM(CAST(pub_Apno AS DECIMAL(12,2))) AS pub_apno
         FROM adv_data
         WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
-        GROUP BY campaign_name, geo, os, payable_event, pub_payout, pid
+        GROUP BY campaign_name, geo, os,vertical, payable_event, pub_payout, pid
         `,
         [pub_id, month],
       );
@@ -132,6 +138,7 @@ exports.getPublisherBillingData = async (req, res) => {
           )
           .map((p) => ({
             pid: p.pid,
+            os: p.os,
             adv_total_number: p.adv_total_number,
             pub_apno: p.pub_apno,
             payout_amount:
@@ -207,6 +214,7 @@ exports.savePublisherBilling = async (req, res) => {
     SET
       campaign_name = ?,
       geo = ?,
+      vertical = ?,
       os = ?,
       payable_event = ?,
       pub_payout = ?,
@@ -217,6 +225,7 @@ exports.savePublisherBilling = async (req, res) => {
           [
             row.campaign_name,
             row.geo,
+            row.vertical,
             row.os,
             row.payable_event,
             row.pub_payout,
@@ -230,16 +239,17 @@ exports.savePublisherBilling = async (req, res) => {
           `
     INSERT INTO publisher_billing
     (
-      pub_id, month,
+      pub_id, month, vertical,
       campaign_name, geo, os,
       payable_event, pub_payout,
       adv_total_number, pub_apno
     )
-    VALUES (?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
     `,
           [
             pub_id,
             month,
+            row.vertical,
             row.campaign_name,
             row.geo,
             row.os,
@@ -259,13 +269,19 @@ exports.savePublisherBilling = async (req, res) => {
         await conn.query(
           `
           INSERT INTO publisher_billing_pid
-          (billing_id, pid, adv_total_number, pub_apno)
-          VALUES (?,?,?,?)
+          (billing_id, pid, os, adv_total_number, pub_apno)
+          VALUES (?,?,?,?,?)
           ON DUPLICATE KEY UPDATE
             adv_total_number=VALUES(adv_total_number),
             pub_apno=VALUES(pub_apno)
           `,
-          [billing_id, p.pid, p.adv_total_number ?? null, p.pub_apno ?? null],
+          [
+            billing_id,
+            p.pid,
+            p.os,
+            p.adv_total_number ?? null,
+            p.pub_apno ?? null,
+          ],
         );
       }
     }

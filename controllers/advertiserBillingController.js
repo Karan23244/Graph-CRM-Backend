@@ -35,6 +35,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
           b.id AS billing_id,
            b.status, 
           b.campaign_name,
+          b.vertical,
           b.geo,
           b.os,
           b.payable_event,
@@ -47,6 +48,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
           (b.approved_no * b.adv_payout) AS payout_amount,
 
           p.pid,
+          p.os AS pid_os,
           p.total_no AS pid_total_no,
           p.deductions AS pid_deductions,
           p.approved_no AS pid_approved_no
@@ -67,6 +69,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
           map[r.billing_id] = {
             billing_id: r.billing_id,
             campaign_name: r.campaign_name,
+            vertical: r.vertical,
             status: r.status,
             geo: r.geo,
             os: r.os,
@@ -85,6 +88,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
         if (r.pid) {
           map[r.billing_id].pid_data.push({
             pid: r.pid,
+            os: r.pid_os,
             total_no: r.pid_total_no,
             deductions: r.pid_deductions,
             approved_no: r.pid_approved_no,
@@ -109,6 +113,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
         SELECT
           TRIM(campaign_name) AS campaign_name,
           TRIM(geo) AS geo,
+          TRIM(vertical) AS vertical,
           GROUP_CONCAT(DISTINCT TRIM(os)) AS os,
           payable_event,
           CAST(adv_payout AS DECIMAL(10,2)) AS adv_payout,
@@ -120,7 +125,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
         WHERE adv_id = ?
           AND shared_date LIKE CONCAT(?, '%')
 
-        GROUP BY campaign_name, geo, payable_event, adv_payout
+        GROUP BY campaign_name, geo, vertical, payable_event, adv_payout
         `,
         [adv_id, month],
       );
@@ -133,6 +138,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
           TRIM(os) AS os,
           payable_event,
           pid,
+          TRIM(vertical) AS vertical,
           CAST(adv_payout AS DECIMAL(10,2)) AS adv_payout,
 
            SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS total_no,
@@ -143,7 +149,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
         WHERE adv_id = ?
           AND shared_date LIKE CONCAT(?, '%')
 
-        GROUP BY campaign_name, geo, os, payable_event, adv_payout, pid
+        GROUP BY campaign_name, geo, vertical, os, payable_event, adv_payout, pid
         `,
         [adv_id, month],
       );
@@ -164,6 +170,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
           )
           .map((p) => ({
             pid: p.pid,
+            os: p.os,
             total_no: p.total_no,
             deductions: p.deductions,
             approved_no: p.approved_no,
@@ -261,6 +268,7 @@ exports.saveAdvertiserBilling = async (req, res) => {
           SET
             campaign_name = ?,
             geo = ?,
+            vertical = ?,
             os = ?,
             payable_event = ?,
             adv_payout = ?,
@@ -272,6 +280,7 @@ exports.saveAdvertiserBilling = async (req, res) => {
           [
             row.campaign_name,
             row.geo,
+            row.vertical,
             row.os,
             row.payable_event,
             adv_payout,
@@ -286,16 +295,17 @@ exports.saveAdvertiserBilling = async (req, res) => {
           `
           INSERT INTO advertiser_billing
           (
-            adv_id, month,
+            adv_id, month, vertical,
             campaign_name, geo, os,
             payable_event, adv_payout,
             total_no, deductions, approved_no
           )
-          VALUES (?,?,?,?,?,?,?,?,?,?)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?)
           `,
           [
             adv_id,
             month,
+            row.vertical,
             row.campaign_name,
             row.geo,
             row.os,
@@ -324,9 +334,10 @@ exports.saveAdvertiserBilling = async (req, res) => {
         await conn.query(
           `
   INSERT INTO advertiser_billing_pid
-  (billing_id, pid, total_no, deductions, approved_no)
-  VALUES (?,?,?,?,?)
+  (billing_id, pid, os, total_no, deductions, approved_no)
+  VALUES (?,?,?,?,?,?)
   ON DUPLICATE KEY UPDATE
+    os = VALUES(os),
     total_no = VALUES(total_no),
     deductions = VALUES(deductions),
     approved_no = VALUES(approved_no)
@@ -334,6 +345,7 @@ exports.saveAdvertiserBilling = async (req, res) => {
           [
             billing_id,
             p.pid,
+            p.os,
             p.total_no ?? null,
             p.deductions ?? null,
             p.approved_no ?? null,
