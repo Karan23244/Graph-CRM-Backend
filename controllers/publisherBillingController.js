@@ -207,60 +207,194 @@ exports.savePublisherBilling = async (req, res) => {
       /* =========================
    2️⃣ UPSERT CAMPAIGN
 ========================= */
+      //   if (billing_id) {
+      //     await conn.query(
+      //       `
+      // UPDATE publisher_billing
+      // SET
+      //   campaign_name = ?,
+      //   geo = ?,
+      //   vertical = ?,
+      //   os = ?,
+      //   payable_event = ?,
+      //   pub_payout = ?,
+      //   adv_total_number = ?,
+      //   pub_apno = ?
+      // WHERE id = ?
+      // `,
+      //       [
+      //         row.campaign_name,
+      //         row.geo,
+      //         row.vertical,
+      //         row.os,
+      //         row.payable_event,
+      //         row.pub_payout,
+      //         adv_total_number,
+      //         pub_apno,
+      //         billing_id,
+      //       ],
+      //     );
+      //   }
+
       if (billing_id) {
-        await conn.query(
-          `
-    UPDATE publisher_billing
-    SET
-      campaign_name = ?,
-      geo = ?,
-      vertical = ?,
-      os = ?,
-      payable_event = ?,
-      pub_payout = ?,
-      adv_total_number = ?,
-      pub_apno = ?
-    WHERE id = ?
-    `,
-          [
-            row.campaign_name,
-            row.geo,
-            row.vertical,
-            row.os,
-            row.payable_event,
-            row.pub_payout,
-            adv_total_number,
-            pub_apno,
-            billing_id,
-          ],
-        );
-      } else {
-        const [result] = await conn.query(
-          `
-    INSERT INTO publisher_billing
-    (
-      pub_id, month, vertical,
-      campaign_name, geo, os,
-      payable_event, pub_payout,
-      adv_total_number, pub_apno
-    )
-    VALUES (?,?,?,?,?,?,?,?,?,?)
-    `,
+        const [[existing]] = await conn.query(
+          `SELECT id, adv_total_number, pub_apno
+     FROM publisher_billing
+     WHERE pub_id=? 
+     AND month=? 
+     AND campaign_name=? 
+     AND geo=? 
+     AND os=? 
+     AND payable_event=? 
+     AND pub_payout=? 
+     AND id <> ? 
+     LIMIT 1`,
           [
             pub_id,
             month,
-            row.vertical,
             row.campaign_name,
             row.geo,
             row.os,
             row.payable_event,
             row.pub_payout,
-            adv_total_number,
-            pub_apno,
+            billing_id,
           ],
         );
 
-        billing_id = result.insertId;
+        if (existing) {
+          // 🔥 MERGE ROWS
+          await conn.query(
+            `UPDATE publisher_billing
+       SET 
+         adv_total_number = IFNULL(adv_total_number,0) + ?,
+         pub_apno = IFNULL(pub_apno,0) + ?
+       WHERE id=?`,
+            [adv_total_number || 0, pub_apno || 0, existing.id],
+          );
+
+          // move pid rows
+          await conn.query(
+            `UPDATE publisher_billing_pid
+       SET billing_id=?
+       WHERE billing_id=?`,
+            [existing.id, billing_id],
+          );
+
+          // delete duplicate row
+          await conn.query(`DELETE FROM publisher_billing WHERE id=?`, [
+            billing_id,
+          ]);
+
+          billing_id = existing.id;
+        } else {
+          // normal update
+          await conn.query(
+            `UPDATE publisher_billing
+       SET campaign_name=?, geo=?, vertical=?, os=?, payable_event=?,
+           pub_payout=?, adv_total_number=?, pub_apno=?
+       WHERE id=?`,
+            [
+              row.campaign_name,
+              row.geo,
+              row.vertical,
+              row.os,
+              row.payable_event,
+              row.pub_payout,
+              adv_total_number,
+              pub_apno,
+              billing_id,
+            ],
+          );
+        }
+      } else {
+        //     const [result] = await conn.query(
+        //       `
+        // INSERT INTO publisher_billing
+        // (
+        //   pub_id, month, vertical,
+        //   campaign_name, geo, os,
+        //   payable_event, pub_payout,
+        //   adv_total_number, pub_apno
+        // )
+        // VALUES (?,?,?,?,?,?,?,?,?,?)
+        // `,
+        //       [
+        //         pub_id,
+        //         month,
+        //         row.vertical,
+        //         row.campaign_name,
+        //         row.geo,
+        //         row.os,
+        //         row.payable_event,
+        //         row.pub_payout,
+        //         adv_total_number,
+        //         pub_apno,
+        //       ],
+        //     );
+
+        //     billing_id = result.insertId;
+        // check if identical campaign row already exists
+        const [[existing]] = await conn.query(
+          `SELECT id, adv_total_number, pub_apno
+   FROM publisher_billing
+   WHERE pub_id=? 
+   AND month=? 
+   AND campaign_name=? 
+   AND geo=? 
+   AND os=? 
+   AND payable_event=? 
+   AND pub_payout=? 
+   LIMIT 1`,
+          [
+            pub_id,
+            month,
+            row.campaign_name,
+            row.geo,
+            row.os,
+            row.payable_event,
+            row.pub_payout,
+          ],
+        );
+
+        if (existing) {
+          // 🔥 MERGE INTO EXISTING ROW
+          await conn.query(
+            `UPDATE publisher_billing
+     SET 
+       adv_total_number = IFNULL(adv_total_number,0) + ?,
+       pub_apno = IFNULL(pub_apno,0) + ?
+     WHERE id=?`,
+            [adv_total_number || 0, pub_apno || 0, existing.id],
+          );
+
+          billing_id = existing.id;
+        } else {
+          // normal insert
+          const [result] = await conn.query(
+            `INSERT INTO publisher_billing
+     (
+       pub_id, month, vertical,
+       campaign_name, geo, os,
+       payable_event, pub_payout,
+       adv_total_number, pub_apno
+     )
+     VALUES (?,?,?,?,?,?,?,?,?,?)`,
+            [
+              pub_id,
+              month,
+              row.vertical,
+              row.campaign_name,
+              row.geo,
+              row.os,
+              row.payable_event,
+              row.pub_payout,
+              adv_total_number,
+              pub_apno,
+            ],
+          );
+
+          billing_id = result.insertId;
+        }
       }
 
       billingIdMap.push({ tmp_id: row._tmp_id || null, billing_id });
