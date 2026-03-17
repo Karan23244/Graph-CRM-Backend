@@ -47,6 +47,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
 
           (b.approved_no * b.adv_payout) AS payout_amount,
 
+          p.id AS pid_id,
           p.pid,
           p.os AS pid_os,
           p.total_no AS pid_total_no,
@@ -87,6 +88,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
 
         if (r.pid) {
           map[r.billing_id].pid_data.push({
+            id: r.pid_id,
             pid: r.pid,
             os: r.pid_os,
             total_no: r.pid_total_no,
@@ -226,6 +228,7 @@ exports.saveAdvertiserBilling = async (req, res) => {
     await conn.beginTransaction();
 
     const billingIdMap = [];
+    const updatedRows = [];
 
     for (const row of data) {
       /* =========================
@@ -331,45 +334,78 @@ exports.saveAdvertiserBilling = async (req, res) => {
       for (const p of row.pid_data || []) {
         if (!p.pid) continue;
 
-        await conn.query(
-          `
-  INSERT INTO advertiser_billing_pid
-  (billing_id, pid, os, total_no, deductions, approved_no)
-  VALUES (?,?,?,?,?,?)
-  ON DUPLICATE KEY UPDATE
-    os = VALUES(os),
-    total_no = VALUES(total_no),
-    deductions = VALUES(deductions),
-    approved_no = VALUES(approved_no)
-  `,
-          [
-            billing_id,
-            p.pid,
-            p.os,
-            p.total_no ?? null,
-            p.deductions ?? null,
-            p.approved_no ?? null,
-          ],
-        );
+        if (p.id) {
+          // ✅ UPDATE existing row by ID
+          await conn.query(
+            `
+      UPDATE advertiser_billing_pid
+      SET
+        pid = ?,
+        os = ?,
+        total_no = ?,
+        deductions = ?,
+        approved_no = ?
+      WHERE id = ?
+      `,
+            [
+              p.pid,
+              p.os,
+              p.total_no ?? null,
+              p.deductions ?? null,
+              p.approved_no ?? null,
+              p.id,
+            ],
+          );
+        } else {
+          // ✅ INSERT new row
+          await conn.query(
+            `
+      INSERT INTO advertiser_billing_pid
+      (billing_id, pid, os, total_no, deductions, approved_no)
+      VALUES (?,?,?,?,?,?)
+      `,
+            [
+              billing_id,
+              p.pid,
+              p.os,
+              p.total_no ?? null,
+              p.deductions ?? null,
+              p.approved_no ?? null,
+            ],
+          );
+        }
       }
+      /* =========================
+     4️⃣ FETCH UPDATED PID (IMPORTANT)
+  ========================= */
+      const [pidRows] = await conn.query(
+        `SELECT * FROM advertiser_billing_pid WHERE billing_id = ?`,
+        [billing_id],
+      );
+
+      /* =========================
+     5️⃣ PUSH FINAL UPDATED ROW
+  ========================= */
+      updatedRows.push({
+        billing_id,
+        campaign_name: row.campaign_name,
+        geo: row.geo,
+        os: row.os,
+        payable_event: row.payable_event,
+        adv_payout,
+        total_no,
+        deductions,
+        approved_no,
+        pid_data: pidRows, // ✅ INCLUDE PID DATA
+      });
     }
 
     await conn.commit();
 
-    const [freshRows] = await conn.query(
-      `
-  SELECT *
-  FROM advertiser_billing
-  WHERE adv_id = ? AND month = ?
-  ORDER BY id
-  `,
-      [adv_id, month],
-    );
-
     res.json({
       success: true,
       billingIdMap,
-      rows: freshRows, // 👈 send updated data
+      rows: updatedRows, // 👈 send updated data
     });
   } catch (err) {
     await conn.rollback();

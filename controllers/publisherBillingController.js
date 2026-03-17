@@ -32,7 +32,7 @@ exports.getPublisherBillingData = async (req, res) => {
           b.adv_total_number,
           b.pub_apno,
          ROUND((b.pub_apno * b.pub_payout), 2) AS payout_amount,
-
+          p.id AS pid_id,
           p.pid,
           p.os AS pid_os,
           p.adv_total_number AS pid_total,
@@ -67,6 +67,7 @@ exports.getPublisherBillingData = async (req, res) => {
 
         if (r.pid) {
           map[r.billing_id].pid_data.push({
+            id: r.pid_id,
             pid: r.pid,
             os: r.pid_os,
             adv_total_number: r.pid_total,
@@ -189,6 +190,7 @@ exports.savePublisherBilling = async (req, res) => {
   try {
     await conn.beginTransaction();
     const billingIdMap = [];
+    const changedRows = [];
 
     for (const row of data) {
       let adv_total_number = null;
@@ -203,38 +205,6 @@ exports.savePublisherBilling = async (req, res) => {
       }
 
       let billing_id = row.billing_id || null;
-
-      /* =========================
-   2️⃣ UPSERT CAMPAIGN
-========================= */
-      //   if (billing_id) {
-      //     await conn.query(
-      //       `
-      // UPDATE publisher_billing
-      // SET
-      //   campaign_name = ?,
-      //   geo = ?,
-      //   vertical = ?,
-      //   os = ?,
-      //   payable_event = ?,
-      //   pub_payout = ?,
-      //   adv_total_number = ?,
-      //   pub_apno = ?
-      // WHERE id = ?
-      // `,
-      //       [
-      //         row.campaign_name,
-      //         row.geo,
-      //         row.vertical,
-      //         row.os,
-      //         row.payable_event,
-      //         row.pub_payout,
-      //         adv_total_number,
-      //         pub_apno,
-      //         billing_id,
-      //       ],
-      //     );
-      //   }
 
       if (billing_id) {
         const [[existing]] = await conn.query(
@@ -307,32 +277,6 @@ exports.savePublisherBilling = async (req, res) => {
           );
         }
       } else {
-        //     const [result] = await conn.query(
-        //       `
-        // INSERT INTO publisher_billing
-        // (
-        //   pub_id, month, vertical,
-        //   campaign_name, geo, os,
-        //   payable_event, pub_payout,
-        //   adv_total_number, pub_apno
-        // )
-        // VALUES (?,?,?,?,?,?,?,?,?,?)
-        // `,
-        //       [
-        //         pub_id,
-        //         month,
-        //         row.vertical,
-        //         row.campaign_name,
-        //         row.geo,
-        //         row.os,
-        //         row.payable_event,
-        //         row.pub_payout,
-        //         adv_total_number,
-        //         pub_apno,
-        //       ],
-        //     );
-
-        //     billing_id = result.insertId;
         // check if identical campaign row already exists
         const [[existing]] = await conn.query(
           `SELECT id, adv_total_number, pub_apno
@@ -398,30 +342,117 @@ exports.savePublisherBilling = async (req, res) => {
       }
 
       billingIdMap.push({ tmp_id: row._tmp_id || null, billing_id });
-
+      // ✅ TRACK UPDATED ROW
+      if (!changedRows.includes(billing_id)) {
+        changedRows.push(billing_id);
+      }
       for (const p of row.pid_data || []) {
-        await conn.query(
-          `
-          INSERT INTO publisher_billing_pid
-          (billing_id, pid, os, adv_total_number, pub_apno)
-          VALUES (?,?,?,?,?)
-          ON DUPLICATE KEY UPDATE
-            adv_total_number=VALUES(adv_total_number),
-            pub_apno=VALUES(pub_apno)
-          `,
-          [
-            billing_id,
-            p.pid,
-            p.os,
-            p.adv_total_number ?? null,
-            p.pub_apno ?? null,
-          ],
-        );
+        if (!p.pid) continue;
+
+        if (p.id) {
+          await conn.query(
+            `
+    UPDATE publisher_billing_pid
+    SET
+      pid = ?,
+      os = ?,
+      adv_total_number = ?,
+      pub_apno = ?
+    WHERE id = ?
+  `,
+            [p.pid, p.os, p.adv_total_number ?? null, p.pub_apno ?? null, p.id],
+          );
+        } else {
+          // ✅ INSERT new row
+          await conn.query(
+            `
+      INSERT INTO publisher_billing_pid
+      (billing_id, pid, os, adv_total_number, pub_apno)
+      VALUES (?,?,?,?,?)
+      `,
+            [
+              billing_id,
+              p.pid,
+              p.os,
+              p.adv_total_number ?? null,
+              p.pub_apno ?? null,
+            ],
+          );
+        }
       }
     }
 
     await conn.commit();
-    res.json({ success: true, billingIdMap });
+    if (!changedRows.length) {
+      return res.json({ success: true, billingIdMap, data: [] });
+    }
+
+    const [rows] = await conn.query(
+      `
+  SELECT
+    b.id AS billing_id,
+    b.status,
+    b.campaign_name,
+    b.vertical,
+    b.geo,
+    b.os,
+    b.payable_event,
+    b.pub_payout,
+
+    b.adv_total_number,
+    b.pub_apno,
+    ROUND((b.pub_apno * b.pub_payout), 2) AS payout_amount,
+
+    p.id AS pid_id,
+    p.pid,
+    p.os AS pid_os,
+    p.adv_total_number AS pid_total,
+    p.pub_apno AS pid_apno
+
+  FROM publisher_billing b
+  LEFT JOIN publisher_billing_pid p
+    ON p.billing_id = b.id
+  WHERE b.id IN (?)
+  ORDER BY b.created_at DESC, b.campaign_name, p.pid
+  `,
+      [changedRows],
+    );
+    const map = {};
+
+    for (const r of rows) {
+      if (!map[r.billing_id]) {
+        map[r.billing_id] = {
+          billing_id: r.billing_id,
+          status: r.status,
+          campaign_name: r.campaign_name,
+          vertical: r.vertical,
+          geo: r.geo,
+          os: r.os,
+          payable_event: r.payable_event,
+          pub_payout: r.pub_payout,
+          adv_total_number: r.adv_total_number,
+          pub_apno: r.pub_apno,
+          payout_amount: r.payout_amount,
+          pid_data: [],
+        };
+      }
+
+      if (r.pid) {
+        map[r.billing_id].pid_data.push({
+          id: r.pid_id,
+          pid: r.pid,
+          os: r.pid_os,
+          adv_total_number: r.pid_total,
+          pub_apno: r.pid_apno,
+          payout_amount: Number(
+            (Number(r.pid_apno || 0) * Number(r.pub_payout || 0)).toFixed(2),
+          ),
+        });
+      }
+    }
+    // same loop
+    const updatedData = Object.values(map);
+    res.json({ success: true, billingIdMap, data: updatedData });
   } catch (e) {
     console.error("PUBLISHER SAVE ERROR:", e);
     await conn.rollback();
