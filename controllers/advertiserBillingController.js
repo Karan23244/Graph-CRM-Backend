@@ -58,7 +58,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
           ON p.billing_id = b.id
 
         WHERE b.adv_id = ? AND b.month = ?
-        ORDER BY b.campaign_name, b.adv_payout, p.pid
+        ORDER BY b.created_at DESC,b.campaign_name, b.adv_payout, p.pid
         `,
         [adv_id, month],
       );

@@ -41,7 +41,7 @@ exports.getPublisherBillingData = async (req, res) => {
         LEFT JOIN publisher_billing_pid p
           ON p.billing_id = b.id
         WHERE b.pub_id=? AND b.month=?
-        ORDER BY b.campaign_name, p.pid
+        ORDER BY b.created_at DESC, b.campaign_name, p.pid
         `,
         [pub_id, month],
       );
