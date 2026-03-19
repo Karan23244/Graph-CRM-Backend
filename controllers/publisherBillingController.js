@@ -97,7 +97,7 @@ exports.getPublisherBillingData = async (req, res) => {
           SUM(CAST(pub_Apno AS DECIMAL(12,2))) AS pub_apno
         FROM adv_data
         WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
-        GROUP BY campaign_name, geo,vertical, payable_event, pub_payout
+        GROUP BY campaign_name, geo,vertical, payable_event, CAST(pay_out AS DECIMAL(10,2))
         `,
         [pub_id, month],
       );
@@ -112,7 +112,7 @@ exports.getPublisherBillingData = async (req, res) => {
         SUM(CAST(pub_Apno AS DECIMAL(12,2))) AS pub_apno
         FROM adv_data
         WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
-        GROUP BY campaign_name, geo, os,vertical, payable_event, pub_payout, pid
+        GROUP BY campaign_name, geo, os,vertical, payable_event, CAST(pay_out AS DECIMAL(10,2)), pid
         `,
         [pub_id, month],
       );

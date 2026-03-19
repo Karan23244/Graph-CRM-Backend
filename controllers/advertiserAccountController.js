@@ -2,25 +2,91 @@ const pool = require("../config/db");
 
 // GET advertiser account
 exports.getAdvertiserAccount = async (req, res) => {
-  const { month } = req.query; // yyyy-mm
+  const { user_id, role = [], assigned_subadmins = [], month } = req.body;
+
+  console.log("Advertiser account request:", {
+    user_id,
+    role,
+    assigned_subadmins,
+    month,
+  });
 
   try {
-    // 1️⃣ Calculate totals
-    const [totals] = await pool.query(
-      `
-      SELECT 
-        adv_id,
-        month,
-        SUM(approved_no * adv_payout) AS total_amount
-      FROM advertiser_billing
-      WHERE status = 'locked'
-      ${month ? "AND month = ?" : ""}
-      GROUP BY adv_id, month
-    `,
-      month ? [month] : [],
-    );
+    let totals = [];
 
-    // 2️⃣ Upsert into advertiser_account
+    /* ============================= */
+    /* 1️⃣ ROLE-BASED AGGREGATION */
+    /* ============================= */
+
+    // ✅ ADMIN + ACCOUNTS → ALL DATA
+    if (role.includes("admin") || role.includes("accounts")) {
+      const [result] = await pool.query(
+        `
+        SELECT 
+          adv_id,
+          month,
+          SUM(approved_no * adv_payout) AS total_amount
+        FROM advertiser_billing
+        WHERE status = 'locked'
+        ${month ? "AND month = ?" : ""}
+        GROUP BY adv_id, month
+      `,
+        month ? [month] : [],
+      );
+
+      totals = result;
+    }
+
+    // ✅ ADVERTISER MANAGER
+    else if (role.includes("advertiser_manager")) {
+      const allowedUsers = [user_id, ...assigned_subadmins];
+
+      const [result] = await pool.query(
+        `
+        SELECT 
+          ab.adv_id,
+          ab.month,
+          SUM(ab.approved_no * ab.adv_payout) AS total_amount
+        FROM advertiser_billing ab
+        JOIN advids ad ON ab.adv_id = ad.adv_id
+        WHERE ab.status = 'locked'
+          AND ad.user_id IN (?)
+          ${month ? "AND ab.month = ?" : ""}
+        GROUP BY ab.adv_id, ab.month
+      `,
+        month ? [allowedUsers, month] : [allowedUsers],
+      );
+
+      totals = result;
+    }
+
+    // ✅ NORMAL ADVERTISER
+    else if (role.includes("advertiser")) {
+      const [result] = await pool.query(
+        `
+        SELECT 
+          ab.adv_id,
+          ab.month,
+          SUM(ab.approved_no * ab.adv_payout) AS total_amount
+        FROM advertiser_billing ab
+        JOIN advids ad ON ab.adv_id = ad.adv_id
+        WHERE ab.status = 'locked'
+          AND ad.user_id = ?
+          ${month ? "AND ab.month = ?" : ""}
+        GROUP BY ab.adv_id, ab.month
+      `,
+        month ? [user_id, month] : [user_id],
+      );
+
+      totals = result;
+    } else {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    /* ============================= */
+    /* 2️⃣ UPSERT */
+    /* ============================= */
+
     for (const row of totals) {
       await pool.query(
         `
@@ -32,25 +98,83 @@ exports.getAdvertiserAccount = async (req, res) => {
       );
     }
 
-    // 3️⃣ Final data
-    const [finalData] = await pool.query(
-      `
-      SELECT 
-        aa.*,
-        ad.adv_name,
-        ad.note
-      FROM advertiser_account aa
-      JOIN advids ad ON aa.adv_id = ad.adv_id
-      ${month ? "WHERE aa.month = ?" : ""}
-      ORDER BY aa.month DESC
-    `,
-      month ? [month] : [],
-    );
+    /* ============================= */
+    /* 3️⃣ FINAL FETCH */
+    /* ============================= */
 
-    res.json(finalData);
+    let finalData = [];
+
+    // ✅ ADMIN + ACCOUNTS
+    if (role.includes("admin") || role.includes("accounts")) {
+      const [result] = await pool.query(
+        `
+        SELECT 
+          aa.*,
+          ad.adv_name,
+          ad.note
+        FROM advertiser_account aa
+        JOIN advids ad ON aa.adv_id = ad.adv_id
+        ${month ? "WHERE aa.month = ?" : ""}
+        ORDER BY aa.month DESC
+      `,
+        month ? [month] : [],
+      );
+
+      finalData = result;
+    }
+
+    // ✅ MANAGER
+    else if (role.includes("advertiser_manager")) {
+      const allowedUsers = [user_id, ...assigned_subadmins];
+
+      const [result] = await pool.query(
+        `
+        SELECT 
+          aa.*,
+          ad.adv_name,
+          ad.note
+        FROM advertiser_account aa
+        JOIN advids ad ON aa.adv_id = ad.adv_id
+        WHERE ad.user_id IN (?)
+        ${month ? "AND aa.month = ?" : ""}
+        ORDER BY aa.month DESC
+      `,
+        month ? [allowedUsers, month] : [allowedUsers],
+      );
+
+      finalData = result;
+    }
+
+    // ✅ NORMAL ADVERTISER
+    else if (role.includes("advertiser")) {
+      const [result] = await pool.query(
+        `
+        SELECT 
+          aa.*,
+          ad.adv_name,
+          ad.note
+        FROM advertiser_account aa
+        JOIN advids ad ON aa.adv_id = ad.adv_id
+        WHERE ad.user_id = ?
+        ${month ? "AND aa.month = ?" : ""}
+        ORDER BY aa.month DESC
+      `,
+        month ? [user_id, month] : [user_id],
+      );
+
+      finalData = result;
+    }
+
+    res.json({
+      success: true,
+      data: finalData,
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server Error" });
+    console.error("Advertiser account error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
 

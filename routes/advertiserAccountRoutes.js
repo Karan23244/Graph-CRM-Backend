@@ -6,7 +6,7 @@ const {
   updateAdvertiserAccount,
 } = require("../controllers/advertiserAccountController");
 
-router.get("/account", getAdvertiserAccount);
+router.post("/account", getAdvertiserAccount);
 router.put("/account/update", updateAdvertiserAccount);
 
 module.exports = router;

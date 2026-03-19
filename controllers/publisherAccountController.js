@@ -3,26 +3,154 @@ const pool = require("../config/db");
 
 
 
+// exports.getPublisherAccount = async (req, res) => {
+//   const { month } = req.query;
+
+//   try {
+//     // 1️⃣ Calculate totals from locked billing
+//     const [totals] = await pool.query(
+//       `
+//       SELECT 
+//         pub_id,
+//         month,
+//         SUM(pub_apno * pub_payout) AS total_amount
+//       FROM publisher_billing
+//       WHERE status = 'locked'
+//       ${month ? "AND month = ?" : ""}
+//       GROUP BY pub_id, month
+//     `,
+//       month ? [month] : [],
+//     );
+
+//     // 2️⃣ Upsert into publisher_account
+//     for (const row of totals) {
+//       await pool.query(
+//         `
+//         INSERT INTO publisher_account (pub_id, month, total_amount)
+//         VALUES (?, ?, ?)
+//         ON DUPLICATE KEY UPDATE total_amount = ?
+//       `,
+//         [row.pub_id, row.month, row.total_amount, row.total_amount],
+//       );
+//     }
+
+//     // 3️⃣ Final data with publisher details
+//     const [finalData] = await pool.query(
+//       `
+//       SELECT 
+//         pa.*,
+//         p.pub_name,
+//         p.note
+//       FROM publisher_account pa
+//       JOIN publids p ON pa.pub_id = p.pub_id
+//       ${month ? "WHERE pa.month = ?" : ""}
+//       ORDER BY pa.month DESC
+//     `,
+//       month ? [month] : [],
+//     );
+
+//     res.json(finalData);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Server Error" });
+//   }
+// };
+
+
 exports.getPublisherAccount = async (req, res) => {
-  const { month } = req.query;
+  const {
+    user_id,
+    role = [],
+    assigned_subadmins = [],
+    month,
+  } = req.body;
+
+  console.log("Publisher account request:", {
+    user_id,
+    role,
+    assigned_subadmins,
+    month,
+  });
 
   try {
-    // 1️⃣ Calculate totals from locked billing
-    const [totals] = await pool.query(
-      `
-      SELECT 
-        pub_id,
-        month,
-        SUM(pub_apno * pub_payout) AS total_amount
-      FROM publisher_billing
-      WHERE status = 'locked'
-      ${month ? "AND month = ?" : ""}
-      GROUP BY pub_id, month
-    `,
-      month ? [month] : [],
-    );
+    let totals = [];
 
-    // 2️⃣ Upsert into publisher_account
+    /* ============================= */
+    /* 1️⃣ ROLE-BASED AGGREGATION */
+    /* ============================= */
+
+    // ✅ ADMIN + ACCOUNTS → ALL DATA
+    if (role.includes("admin") || role.includes("accounts")) {
+      const [result] = await pool.query(
+        `
+        SELECT 
+          pub_id,
+          month,
+          SUM(pub_apno * pub_payout) AS total_amount
+        FROM publisher_billing
+        WHERE status = 'locked'
+        ${month ? "AND month = ?" : ""}
+        GROUP BY pub_id, month
+      `,
+        month ? [month] : []
+      );
+
+      totals = result;
+    }
+
+    // ✅ PUBLISHER MANAGER → LIMITED DATA
+    else if (role.includes("publisher_manager")) {
+      const allowedUsers = [user_id, ...assigned_subadmins];
+
+      const [result] = await pool.query(
+        `
+        SELECT 
+          pb.pub_id,
+          pb.month,
+          SUM(pb.pub_apno * pb.pub_payout) AS total_amount
+        FROM publisher_billing pb
+        JOIN publids p ON pb.pub_id = p.pub_id
+        WHERE pb.status = 'locked'
+          AND p.user_id IN (?)
+          ${month ? "AND pb.month = ?" : ""}
+        GROUP BY pb.pub_id, pb.month
+      `,
+        month ? [allowedUsers, month] : [allowedUsers]
+      );
+
+      totals = result;
+    }
+
+    // ✅ NORMAL PUBLISHER → ONLY OWN DATA
+    else if (role.includes("publisher")) {
+      const [result] = await pool.query(
+        `
+        SELECT 
+          pb.pub_id,
+          pb.month,
+          SUM(pb.pub_apno * pb.pub_payout) AS total_amount
+        FROM publisher_billing pb
+        JOIN publids p ON pb.pub_id = p.pub_id
+        WHERE pb.status = 'locked'
+          AND p.user_id = ?
+          ${month ? "AND pb.month = ?" : ""}
+        GROUP BY pb.pub_id, pb.month
+      `,
+        month ? [user_id, month] : [user_id]
+      );
+
+      totals = result;
+    }
+
+    // ❌ UNAUTHORIZED
+    else {
+      return res.status(403).json({ message: "Unauthorized" });
+    }
+
+    /* ============================= */
+    /* 2️⃣ UPSERT INTO ACCOUNT TABLE */
+    /* ============================= */
+
     for (const row of totals) {
       await pool.query(
         `
@@ -30,31 +158,96 @@ exports.getPublisherAccount = async (req, res) => {
         VALUES (?, ?, ?)
         ON DUPLICATE KEY UPDATE total_amount = ?
       `,
-        [row.pub_id, row.month, row.total_amount, row.total_amount],
+        [row.pub_id, row.month, row.total_amount, row.total_amount]
       );
     }
 
-    // 3️⃣ Final data with publisher details
-    const [finalData] = await pool.query(
-      `
-      SELECT 
-        pa.*,
-        p.pub_name,
-        p.note
-      FROM publisher_account pa
-      JOIN publids p ON pa.pub_id = p.pub_id
-      ${month ? "WHERE pa.month = ?" : ""}
-      ORDER BY pa.month DESC
-    `,
-      month ? [month] : [],
-    );
+    /* ============================= */
+    /* 3️⃣ FINAL FETCH (ROLE-BASED) */
+    /* ============================= */
 
-    res.json(finalData);
+    let finalData = [];
+
+    // ✅ ADMIN + ACCOUNTS
+    if (role.includes("admin") || role.includes("accounts")) {
+      const [result] = await pool.query(
+        `
+        SELECT 
+          pa.*,
+          p.pub_name,
+          p.note
+        FROM publisher_account pa
+        JOIN publids p ON pa.pub_id = p.pub_id
+        ${month ? "WHERE pa.month = ?" : ""}
+        ORDER BY pa.month DESC
+      `,
+        month ? [month] : []
+      );
+
+      finalData = result;
+    }
+
+    // ✅ PUBLISHER MANAGER
+    else if (role.includes("publisher_manager")) {
+      const allowedUsers = [user_id, ...assigned_subadmins];
+
+      const [result] = await pool.query(
+        `
+        SELECT 
+          pa.*,
+          p.pub_name,
+          p.note
+        FROM publisher_account pa
+        JOIN publids p ON pa.pub_id = p.pub_id
+        WHERE p.user_id IN (?)
+        ${month ? "AND pa.month = ?" : ""}
+        ORDER BY pa.month DESC
+      `,
+        month ? [allowedUsers, month] : [allowedUsers]
+      );
+
+      finalData = result;
+    }
+
+    // ✅ NORMAL PUBLISHER
+    else if (role.includes("publisher")) {
+      const [result] = await pool.query(
+        `
+        SELECT 
+          pa.*,
+          p.pub_name,
+          p.note
+        FROM publisher_account pa
+        JOIN publids p ON pa.pub_id = p.pub_id
+        WHERE p.user_id = ?
+        ${month ? "AND pa.month = ?" : ""}
+        ORDER BY pa.month DESC
+      `,
+        month ? [user_id, month] : [user_id]
+      );
+
+      finalData = result;
+    }
+
+    /* ============================= */
+    /* 4️⃣ RESPONSE */
+    /* ============================= */
+
+    res.json({
+      success: true,
+      data: finalData,
+    });
+
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server Error" });
+    console.error("Publisher account error:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
   }
 };
+
+
 // UPDATE publisher account
 exports.updatePublisherAccount = async (req, res) => {
   const {

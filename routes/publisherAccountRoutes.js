@@ -6,7 +6,7 @@ const {
   updatePublisherAccount,
 } = require("../controllers/publisherAccountController");
 
-router.get("/account", getPublisherAccount);
+router.post("/account", getPublisherAccount);
 router.put("/account/update", updatePublisherAccount);
 
 module.exports = router;

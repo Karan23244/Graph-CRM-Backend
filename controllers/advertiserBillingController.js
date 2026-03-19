@@ -127,7 +127,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
         WHERE adv_id = ?
           AND shared_date LIKE CONCAT(?, '%')
 
-        GROUP BY campaign_name, geo, vertical, payable_event, adv_payout
+        GROUP BY campaign_name, geo, vertical, payable_event, CAST(adv_payout AS DECIMAL(10,2))
         `,
         [adv_id, month],
       );
@@ -151,7 +151,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
         WHERE adv_id = ?
           AND shared_date LIKE CONCAT(?, '%')
 
-        GROUP BY campaign_name, geo, vertical, os, payable_event, adv_payout, pid
+        GROUP BY campaign_name, geo, vertical, os, payable_event, CAST(adv_payout AS DECIMAL(10,2)), pid
         `,
         [adv_id, month],
       );
@@ -216,205 +216,6 @@ exports.getAdvertiserBillingData = async (req, res) => {
   }
 };
 
-/* =====================================================
-   SAVE BILLING
-===================================================== */
-// exports.saveAdvertiserBilling = async (req, res) => {
-//   const { adv_id, month, data } = req.body;
-//   const conn = await pool.getConnection();
-//   console.log("Saving advertiser billing:", adv_id, month);
-//   console.log("Data:", data);
-//   try {
-//     await conn.beginTransaction();
-
-//     const billingIdMap = [];
-//     const updatedRows = [];
-
-//     for (const row of data) {
-//       /* =========================
-//      0️⃣ NORMALIZE PAYOUT
-//   ========================= */
-//       const adv_payout =
-//         row.adv_payout !== undefined &&
-//         row.adv_payout !== null &&
-//         row.adv_payout !== ""
-//           ? Number(row.adv_payout)
-//           : 0;
-//       /* =========================
-//          1️⃣ CALCULATE TOTALS
-//       ========================= */
-//       let total_no = null;
-//       let deductions = null;
-//       let approved_no = null;
-
-//       for (const p of row.pid_data || []) {
-//         if (p.total_no != null) {
-//           total_no = (total_no ?? 0) + Number(p.total_no);
-//         }
-//         if (p.deductions != null) {
-//           deductions = (deductions ?? 0) + Number(p.deductions);
-//         }
-//         if (p.approved_no != null) {
-//           approved_no = (approved_no ?? 0) + Number(p.approved_no);
-//         }
-//       }
-
-//       /* =========================
-//          2️⃣ UPSERT CAMPAIGN
-//       ========================= */
-//       let billing_id = row.billing_id || null;
-
-//       if (billing_id) {
-//         await conn.query(
-//           `
-//           UPDATE advertiser_billing
-//           SET
-//             campaign_name = ?,
-//             geo = ?,
-//             vertical = ?,
-//             os = ?,
-//             payable_event = ?,
-//             adv_payout = ?,
-//             total_no = ?,
-//             deductions = ?,
-//             approved_no = ?
-//           WHERE id = ?
-//           `,
-//           [
-//             row.campaign_name,
-//             row.geo,
-//             row.vertical,
-//             row.os,
-//             row.payable_event,
-//             adv_payout,
-//             total_no,
-//             deductions,
-//             approved_no,
-//             billing_id,
-//           ],
-//         );
-//       } else {
-//         const [result] = await conn.query(
-//           `
-//           INSERT INTO advertiser_billing
-//           (
-//             adv_id, month, vertical,
-//             campaign_name, geo, os,
-//             payable_event, adv_payout,
-//             total_no, deductions, approved_no
-//           )
-//           VALUES (?,?,?,?,?,?,?,?,?,?,?)
-//           `,
-//           [
-//             adv_id,
-//             month,
-//             row.vertical,
-//             row.campaign_name,
-//             row.geo,
-//             row.os,
-//             row.payable_event,
-//             adv_payout,
-//             total_no,
-//             deductions,
-//             approved_no,
-//           ],
-//         );
-
-//         billing_id = result.insertId;
-//       }
-
-//       billingIdMap.push({
-//         tmp_id: row._tmp_id || null,
-//         billing_id,
-//       });
-
-//       /* =========================
-//          3️⃣ UPSERT PID
-//       ========================= */
-//       for (const p of row.pid_data || []) {
-//         if (!p.pid) continue;
-
-//         if (p.id) {
-//           // ✅ UPDATE existing row by ID
-//           await conn.query(
-//             `
-//       UPDATE advertiser_billing_pid
-//       SET
-//         pid = ?,
-//         os = ?,
-//         total_no = ?,
-//         deductions = ?,
-//         approved_no = ?
-//       WHERE id = ?
-//       `,
-//             [
-//               p.pid,
-//               p.os,
-//               p.total_no ?? null,
-//               p.deductions ?? null,
-//               p.approved_no ?? null,
-//               p.id,
-//             ],
-//           );
-//         } else {
-//           // ✅ INSERT new row
-//           await conn.query(
-//             `
-//       INSERT INTO advertiser_billing_pid
-//       (billing_id, pid, os, total_no, deductions, approved_no)
-//       VALUES (?,?,?,?,?,?)
-//       `,
-//             [
-//               billing_id,
-//               p.pid,
-//               p.os,
-//               p.total_no ?? null,
-//               p.deductions ?? null,
-//               p.approved_no ?? null,
-//             ],
-//           );
-//         }
-//       }
-//       /* =========================
-//      4️⃣ FETCH UPDATED PID (IMPORTANT)
-//   ========================= */
-//       const [pidRows] = await conn.query(
-//         `SELECT * FROM advertiser_billing_pid WHERE billing_id = ?`,
-//         [billing_id],
-//       );
-
-//       /* =========================
-//      5️⃣ PUSH FINAL UPDATED ROW
-//   ========================= */
-//       updatedRows.push({
-//         billing_id,
-//         campaign_name: row.campaign_name,
-//         geo: row.geo,
-//         os: row.os,
-//         payable_event: row.payable_event,
-//         adv_payout,
-//         total_no,
-//         deductions,
-//         approved_no,
-//         pid_data: pidRows, // ✅ INCLUDE PID DATA
-//       });
-//     }
-
-//     await conn.commit();
-
-//     res.json({
-//       success: true,
-//       billingIdMap,
-//       rows: updatedRows, // 👈 send updated data
-//     });
-//   } catch (err) {
-//     await conn.rollback();
-//     console.error("Advertiser save error:", err);
-//     res.status(500).json({ success: false });
-//   } finally {
-//     conn.release();
-//   }
-// };
 exports.saveAdvertiserBilling = async (req, res) => {
   const { adv_id, month, data } = req.body;
   const conn = await pool.getConnection();
