@@ -36,8 +36,8 @@ const io = new Server(server, {
 
 // ✅ Attach `io` to the app BEFORE routes
 app.set("io", io);
-// app.use(cors());
-// app.use(express.json());
+app.use(cors());
+app.use(express.json());
 
 //  ^|^e CORS FIRST
 

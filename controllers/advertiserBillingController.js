@@ -5,7 +5,7 @@ const pool = require("../config/db");
 ===================================================== */
 exports.getAdvertiserBillingData = async (req, res) => {
   let { id: adv_id, month } = req.body;
-
+  console.log("Advertiser billing data request:", { adv_id, month });
   // normalize month (VERY IMPORTANT)
   month = month.trim(); // "2025-01"
 
@@ -167,7 +167,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
               p.campaign_name === s.campaign_name &&
               p.geo === s.geo &&
               p.payable_event === s.payable_event &&
-              s.os.split(",").includes(p.os) &&
+              (s.os || "").split(",").includes(p.os) &&
               Number(p.adv_payout) === Number(s.adv_payout),
           )
           .map((p) => ({
