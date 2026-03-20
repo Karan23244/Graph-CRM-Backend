@@ -132,6 +132,7 @@ exports.getPublisherBillingData = async (req, res) => {
             (p) =>
               p.campaign_name === s.campaign_name &&
               p.geo === s.geo &&
+              p.vertical === s.vertical &&
               p.payable_event === s.payable_event &&
               p.os &&
               s.os.includes(p.os) &&
@@ -215,6 +216,7 @@ exports.savePublisherBilling = async (req, res) => {
      AND campaign_name=? 
      AND geo=? 
      AND os=? 
+     AND vertical=?
      AND payable_event=? 
      AND pub_payout=? 
      AND id <> ? 
@@ -225,6 +227,7 @@ exports.savePublisherBilling = async (req, res) => {
             row.campaign_name,
             row.geo,
             row.os,
+            row.vertical,
             row.payable_event,
             row.pub_payout,
             billing_id,
@@ -286,6 +289,7 @@ exports.savePublisherBilling = async (req, res) => {
    AND campaign_name=? 
    AND geo=? 
    AND os=? 
+   AND vertical=?
    AND payable_event=? 
    AND pub_payout=? 
    LIMIT 1`,
@@ -295,6 +299,7 @@ exports.savePublisherBilling = async (req, res) => {
             row.campaign_name,
             row.geo,
             row.os,
+            row.vertical,
             row.payable_event,
             row.pub_payout,
           ],

@@ -268,6 +268,7 @@ exports.saveAdvertiserBilling = async (req, res) => {
            AND campaign_name=? 
            AND geo=? 
            AND os=? 
+           AND vertical=?
            AND payable_event=? 
            AND adv_payout=? 
            AND id <> ?
@@ -278,6 +279,7 @@ exports.saveAdvertiserBilling = async (req, res) => {
             row.campaign_name,
             row.geo,
             row.os,
+            row.vertical,
             row.payable_event,
             adv_payout,
             billing_id,
@@ -340,6 +342,7 @@ exports.saveAdvertiserBilling = async (req, res) => {
            AND campaign_name=? 
            AND geo=? 
            AND os=? 
+           AND vertical=?
            AND payable_event=? 
            AND adv_payout=? 
            LIMIT 1`,
@@ -349,6 +352,7 @@ exports.saveAdvertiserBilling = async (req, res) => {
             row.campaign_name,
             row.geo,
             row.os,
+            row.vertical,
             row.payable_event,
             adv_payout,
           ],
