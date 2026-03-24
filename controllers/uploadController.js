@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const csv = require("fast-csv");
 const pool = require("../config/db");
-
+const { processCampaignUploads } = require("../services/campaignUploadService");
 const FILE_MAP = {
   installs: "noi",
   "blocked-installs": "rti",
@@ -36,7 +36,7 @@ async function streamXlsxRows(filePath, onRow) {
     if (row.number === 1) {
       // normalize header names (no spaces, lowercased)
       headers = row.values.map((h) =>
-        (h || "").toString().replace(/\s+/g, "").toLowerCase()
+        (h || "").toString().replace(/\s+/g, "").toLowerCase(),
       );
       continue;
     }
@@ -121,7 +121,7 @@ function normalizeDateRaw(raw) {
     if (isNaN(raw)) return null;
     return `${raw.getFullYear()}-${String(raw.getMonth() + 1).padStart(
       2,
-      "0"
+      "0",
     )}-${String(raw.getDate()).padStart(2, "0")}`;
   }
 
@@ -142,7 +142,7 @@ function normalizeDateRaw(raw) {
     if (d && !isNaN(d))
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
         2,
-        "0"
+        "0",
       )}-${String(d.getDate()).padStart(2, "0")}`;
 
     return null;
@@ -161,7 +161,7 @@ function normalizeDateRaw(raw) {
   if (!isNaN(parsed)) {
     return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(
       2,
-      "0"
+      "0",
     )}-${String(parsed.getDate()).padStart(2, "0")}`;
   }
 
@@ -187,7 +187,7 @@ function normalizeDateRaw(raw) {
     const d = new Date(
       parseInt(m2[1], 10),
       parseInt(m2[2], 10) - 1,
-      parseInt(m2[3], 10)
+      parseInt(m2[3], 10),
     );
     if (!isNaN(d)) {
       const y = d.getFullYear();
@@ -212,7 +212,7 @@ function parseExcelDate(value, metricName, pid) {
   if (value instanceof Date) {
     const iso = `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(
       2,
-      "0"
+      "0",
     )}-${String(value.getDate()).padStart(2, "0")}`;
     console.log(`📅 [${metricName}] Parsed Date object → ${iso} (PID=${pid})`);
     return iso;
@@ -224,7 +224,7 @@ function parseExcelDate(value, metricName, pid) {
     const dt = new Date(base.getTime() + Number(value) * 86400 * 1000);
     const iso = formatLocalDate(dt);
     console.log(
-      `📅 [${metricName}] Parsed Excel serial=${value} → ${iso} (PID=${pid})`
+      `📅 [${metricName}] Parsed Excel serial=${value} → ${iso} (PID=${pid})`,
     );
     return iso;
   }
@@ -238,7 +238,7 @@ function parseExcelDate(value, metricName, pid) {
     if (m) {
       const iso = `${m[1]}-${m[2]}-${m[3]}`;
       console.log(
-        `📅 [${metricName}] Parsed YYYY-MM-DD='${cleaned}' → ${iso} (PID=${pid})`
+        `📅 [${metricName}] Parsed YYYY-MM-DD='${cleaned}' → ${iso} (PID=${pid})`,
       );
       return iso;
     }
@@ -250,7 +250,7 @@ function parseExcelDate(value, metricName, pid) {
       const month = m[2].padStart(2, "0");
       const iso = `${m[3]}-${month}-${day}`;
       console.log(
-        `📅 [${metricName}] Parsed DD/MM/YYYY='${cleaned}' → ${iso} (PID=${pid})`
+        `📅 [${metricName}] Parsed DD/MM/YYYY='${cleaned}' → ${iso} (PID=${pid})`,
       );
       return iso;
     }
@@ -260,14 +260,14 @@ function parseExcelDate(value, metricName, pid) {
     if (!isNaN(dt)) {
       const iso = formatLocalDate(dt);
       console.log(
-        `📅 [${metricName}] JS fallback parsed '${cleaned}' → ${iso} (PID=${pid})`
+        `📅 [${metricName}] JS fallback parsed '${cleaned}' → ${iso} (PID=${pid})`,
       );
       return iso;
     }
   }
 
   console.log(
-    `❌ [${metricName}] Could not parse date='${value}' (PID=${pid})`
+    `❌ [${metricName}] Could not parse date='${value}' (PID=${pid})`,
   );
   return null;
 }
@@ -356,7 +356,7 @@ WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(1
       REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
   AND DATE(shared_date) BETWEEN ? AND ?
   AND os = ?;`,
-    [campaignName, startDate, endDate, os]
+    [campaignName, startDate, endDate, os],
   );
 
   const pidMap = new Map();
@@ -393,7 +393,6 @@ WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(1
 const handleUpload = async (req, res) => {
   try {
     const { campaignName, os, geo, dateRange, socketId } = req.body;
-    console.log(socketId);
     const fullCampaignName = campaignName;
     const baseCampaignName = campaignName.split(",")[0];
 
@@ -403,6 +402,7 @@ const handleUpload = async (req, res) => {
     }
 
     let uploaded = [];
+
     if (Array.isArray(req.files)) uploaded = req.files;
     else if (req.files) uploaded = Object.values(req.files).flat();
     else if (req.file) uploaded = [req.file];
@@ -410,26 +410,16 @@ const handleUpload = async (req, res) => {
     if (!campaignName || uploaded.length === 0) {
       return res.status(400).json({ msg: "Missing fields or files" });
     }
-
-    console.log("📂 Fetching adv_data for campaign:", campaignName);
-    const advData = await getAdvDataFromDB(
-      baseCampaignName,
-      startDate,
-      endDate,
-      os
-    );
+  
     // ✅ Step 2: Fetch adv_data from 30 days before startDate
     const prev30Start = new Date(startDate);
     prev30Start.setDate(prev30Start.getDate() - 30);
     const prev30Str = prev30Start.toISOString().split("T")[0];
-    console.log(
-      `📅 Fetching additional adv_data from ${prev30Str} to ${startDate} (30 days before)`
-    );
     const advDataPrev30 = await getAdvDataFromDB(
       baseCampaignName,
       prev30Str,
       startDate,
-      os
+      os,
     );
     // ✅ Step 3: Create a map of all advData by PID
     const advPidMap = new Map();
@@ -469,7 +459,7 @@ const handleUpload = async (req, res) => {
       const normalize = (str) => str.toLowerCase().replace(/[\s\-_]/g, "");
 
       const sortedKeys = Object.keys(FILE_MAP).sort(
-        (a, b) => b.length - a.length
+        (a, b) => b.length - a.length,
       );
       const fileNameNorm = normalize(file.originalname);
 
@@ -479,22 +469,22 @@ const handleUpload = async (req, res) => {
         const metricName = FILE_MAP[key];
         uploadedMetricNames.add(metricName);
         console.log(
-          `📂 Processing file: ${file.originalname} → matched key="${key}" → metric=${metricName}`
+          `📂 Processing file: ${file.originalname} → matched key="${key}" → metric=${metricName}`,
         );
       } else {
         console.log(
-          `❌ No key matched for: ${file.originalname} (normalized=${fileNameNorm})`
+          `❌ No key matched for: ${file.originalname} (normalized=${fileNameNorm})`,
         );
       }
 
       const metricName = FILE_MAP[key];
       uploadedMetricNames.add(metricName);
       console.log(
-        `📂 Processing file: ${file.originalname} → matched key="${key}" → metric=${metricName}`
+        `📂 Processing file: ${file.originalname} → matched key="${key}" → metric=${metricName}`,
       );
       await streamFileRows(file.path, async (row, headers) => {
         const mediaSourceKey = headers.find((c) =>
-          /media[-_\s]?source/i.test(c)
+          /media[-_\s]?source/i.test(c),
         );
         const sourceVal = mediaSourceKey ? row[mediaSourceKey] : null;
         if (!sourceVal) return;
@@ -507,7 +497,7 @@ const handleUpload = async (req, res) => {
         // check once if installs file is present
         // Detect presence of key files once
         const hasNoiFile = uploaded.some((f) =>
-          f.originalname.toLowerCase().includes("installs")
+          f.originalname.toLowerCase().includes("installs"),
         );
         // const hasNoeFile = uploaded.some(f =>
         //   f.originalname.toLowerCase().includes("in-app-event")
@@ -576,7 +566,7 @@ const handleUpload = async (req, res) => {
 
           // ---- Normal clicks ----
           const clicksIdx = normHeaders.findIndex(
-            (c) => c === "clicks" || c === "click"
+            (c) => c === "clicks" || c === "click",
           );
           if (clicksIdx !== -1) {
             const clicksKey = headers[clicksIdx]; // use original header to access row value
@@ -590,7 +580,7 @@ const handleUpload = async (req, res) => {
           // ---- Fallback NOI (if installs file not uploaded, get from installs appsflyer column in clicks) ----
           if (!uploadedMetricNames.has("noi")) {
             const noiIdx = normHeaders.findIndex((c) =>
-              c.includes("installsappsflyer")
+              c.includes("installsappsflyer"),
             );
             if (noiIdx !== -1) {
               const noiKey = headers[noiIdx];
@@ -598,7 +588,7 @@ const handleUpload = async (req, res) => {
                 Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0;
               incIfPidDate(metricCounts.noi, pid, metricsDate, noiVal);
               console.log(
-                `📊 [Fallback NOI] PID=${pid}, date=${metricsDate}, val=${noiVal}`
+                `📊 [Fallback NOI] PID=${pid}, date=${metricsDate}, val=${noiVal}`,
               );
             }
           }
@@ -616,7 +606,7 @@ const handleUpload = async (req, res) => {
                 const originalKey = headers[idx];
                 const val =
                   Number(
-                    (row[originalKey] || "").toString().replace(/,/g, "")
+                    (row[originalKey] || "").toString().replace(/,/g, ""),
                   ) || 0;
                 noeSum += val;
               }
@@ -625,7 +615,7 @@ const handleUpload = async (req, res) => {
             if (noeSum > 0) {
               incIfPidDate(metricCounts.noe, pid, metricsDate, noeSum);
               console.log(
-                `📊 [Fallback NOE SUM] PID=${pid}, date=${metricsDate}, noe=${noeSum}`
+                `📊 [Fallback NOE SUM] PID=${pid}, date=${metricsDate}, noe=${noeSum}`,
               );
             }
           }
@@ -648,7 +638,7 @@ const handleUpload = async (req, res) => {
           if (!dateVal || isNaN(dateVal)) return;
 
           const metricsDate = `${dateVal.getFullYear()}-${String(
-            dateVal.getMonth() + 1
+            dateVal.getMonth() + 1,
           ).padStart(2, "0")}-${String(dateVal.getDate()).padStart(2, "0")}`;
 
           // Count 1 install per row
@@ -706,7 +696,7 @@ const handleUpload = async (req, res) => {
     }
 
     console.log(
-      `📊 Total adv_data combined (main + 30-day): ${mergedAdvData.length}`
+      `📊 Total adv_data combined (main + 30-day): ${mergedAdvData.length}`,
     );
 
     // ✅ Use mergedAdvData instead of advData going forward
