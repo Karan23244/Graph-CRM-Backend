@@ -37,8 +37,8 @@ const io = new Server(server, {
 
 // ✅ Attach `io` to the app BEFORE routes
 app.set("io", io);
-app.use(cors());
-app.use(express.json());
+// app.use(cors());
+// app.use(express.json());
 
 //  ^|^e CORS FIRST
 
@@ -844,7 +844,7 @@ app.post("/api/upload", upload.array("files"), async (req, res) => {
   const allFiles = req.files || [];
 
   try {
-    const { campaignname, os, daterange, geo } = req.body;
+    const { campaignname, os, daterange, geo, socketId } = req.body;
 
     if (allFiles.length === 0) {
       return res.status(400).json({ error: "Files required" });
@@ -943,12 +943,27 @@ ON DUPLICATE KEY UPDATE
 
     // ✅ Batch insert with larger chunks + concurrency
     await batchInsert(conn, query, rows, 5000);
+    // Emit socket event if socketId provided
+    const io = req.app.get("io");
+    if (socketId && io && io.sockets && io.sockets.sockets.get(socketId)) {
+      io.to(socketId).emit("uploadComplete", {
+        status: "success",
+        message: "Upload successful",
+        processed: rows.length,
+      });
+      console.log("✅ Emitted uploadComplete to:", socketId);
+    } else {
+      console.log("⚠️ Socket not connected or invalid:", socketId);
+    }
 
-    res.json({
-      success: true,
-      processed: rows.length,
-      message: "Data inserted successfully 🚀",
-    });
+    res
+      .status(200)
+      .json({ msg: "Upload successful",  processed: rows.length});
+    // res.json({
+    //   success: true,
+    //   processed: rows.length,
+    //   message: "Data inserted successfully 🚀",
+    // });
   } catch (err) {
     console.error("❌ ERROR:", err);
     res.status(500).json({ error: "Server error" });
