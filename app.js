@@ -392,7 +392,7 @@ const FILE_MAP = {
   "non-organic-in-app-event": "noe",
 };
 
-// ✅ DATE HELPERS
+// ✅ EXCEL DATE → JS DATE
 function excelDateToJSDate(serial) {
   if (!serial) return null;
 
@@ -419,8 +419,9 @@ function excelDateToJSDate(serial) {
   );
 }
 
+// ✅ FORMAT DATE FOR MYSQL
 function formatDateToMySQL(date) {
-  if (!date) return null;
+  if (!date || isNaN(date)) return null;
 
   const pad = (n) => (n < 10 ? "0" + n : n);
 
@@ -431,7 +432,39 @@ function formatDateToMySQL(date) {
   )}`;
 }
 
-// ✅ PARSE MULTIPLE FILES INTO MAP
+// ✅ UNIVERSAL DATE PARSER (FIXED)
+function parseDateTime(timeRaw) {
+  if (!timeRaw) return null;
+
+  // Excel numeric date
+  if (typeof timeRaw === "number") {
+    return formatDateToMySQL(excelDateToJSDate(timeRaw));
+  }
+
+  // String date
+  if (typeof timeRaw === "string") {
+    // Try native parsing first
+    const parsed = new Date(timeRaw);
+    if (!isNaN(parsed)) {
+      return formatDateToMySQL(parsed);
+    }
+
+    // Fallback: DD/MM/YYYY HH:mm:ss
+    const parts = timeRaw.split(" ");
+    if (parts.length < 2) return null;
+
+    const [datePart, timePart] = parts;
+    const [d, m, y] = datePart.split("/");
+
+    if (!d || !m || !y) return null;
+
+    return `${y}-${m}-${d} ${timePart}:00`;
+  }
+
+  return null;
+}
+
+// ✅ PARSE MULTIPLE FILES
 function parseMultipleFiles(files, isEvent = false) {
   const map = new Map();
 
@@ -441,21 +474,17 @@ function parseMultipleFiles(files, isEvent = false) {
     const data = XLSX.utils.sheet_to_json(sheet);
 
     for (const row of data) {
-      const key = row["Advertising ID"] || row["IDFA"];
-      if (!key) continue;
+      const rawKey = row["Advertising ID"] || row["IDFA"] || row["IP"];
+      if (!rawKey) continue;
 
-      let timeRaw = isEvent ? row["Event Time"] : row["Install Time"];
-      let formattedTime = null;
+      const key = rawKey;
 
-      if (typeof timeRaw === "number") {
-        formattedTime = formatDateToMySQL(excelDateToJSDate(timeRaw));
-      } else if (typeof timeRaw === "string") {
-        const [datePart, timePart] = timeRaw.split(" ");
-        const [d, m, y] = datePart.split("/");
-        formattedTime = `${y}-${m}-${d} ${timePart}:00`;
-      }
+      const timeRaw = isEvent ? row["Event Time"] : row["Install Time"];
 
-      // ✅ keep first occurrence
+      const formattedTime = parseDateTime(timeRaw);
+
+      if (!formattedTime) continue;
+
       if (!map.has(key)) {
         map.set(key, formattedTime);
       }
@@ -465,158 +494,7 @@ function parseMultipleFiles(files, isEvent = false) {
   return map;
 }
 
-/* ============================= */
-/* 🚀 MAIN API */
-/* ============================= */
-
-// app.post("/api/upload", upload.array("files"), async (req, res) => {
-//   try {
-//     const { campaignname, os, daterange, geo } = req.body;
-
-//     if (!req.files || req.files.length === 0) {
-//       return res.status(400).json({ error: "Files required" });
-//     }
-
-//     // ✅ STEP 1: Categorize files (MULTIPLE SUPPORT)
-//     const categorizedFiles = {};
-
-//     for (const file of req.files) {
-//       const name = file.originalname.toLowerCase();
-
-//       for (const key in FILE_MAP) {
-//         if (name.includes(key)) {
-//           const type = FILE_MAP[key];
-
-//           if (!categorizedFiles[type]) {
-//             categorizedFiles[type] = [];
-//           }
-
-//           categorizedFiles[type].push(file);
-//         }
-//       }
-//     }
-
-//     // ❗ Install file required
-//     const installFiles = categorizedFiles.noi;
-
-//     if (!installFiles || installFiles.length === 0) {
-//       return res.status(400).json({ error: "Install file missing" });
-//     }
-
-//     // ✅ DEBUG (VERY IMPORTANT)
-//     console.log({
-//       installFiles: categorizedFiles.noi?.length || 0,
-//       rtiFiles: categorizedFiles.rti?.length || 0,
-//       piFiles: categorizedFiles.pi?.length || 0,
-//       noeFiles: categorizedFiles.noe?.length || 0,
-//       peFiles: categorizedFiles.pe?.length || 0,
-//     });
-
-//     // ✅ STEP 2: Create lookup maps
-//     const rtiMap = categorizedFiles.rti
-//       ? parseMultipleFiles(categorizedFiles.rti)
-//       : new Map();
-
-//     const piMap = categorizedFiles.pi
-//       ? parseMultipleFiles(categorizedFiles.pi)
-//       : new Map();
-
-//     const noeMap = categorizedFiles.noe
-//       ? parseMultipleFiles(categorizedFiles.noe, true)
-//       : new Map();
-
-//     const peMap = categorizedFiles.pe
-//       ? parseMultipleFiles(categorizedFiles.pe, true)
-//       : new Map();
-
-//     // ✅ STEP 3: Process ALL install files
-//     const rows = [];
-
-//     for (const installFile of installFiles) {
-//       const workbook = XLSX.readFile(installFile.path);
-//       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-//       const data = XLSX.utils.sheet_to_json(sheet);
-
-//       for (const row of data) {
-//         const key = row["Advertising ID"] || row["IDFA"];
-
-//         let installTimeRaw = row["Install Time"];
-//         let installTime = null;
-
-//         if (typeof installTimeRaw === "number") {
-//           installTime = formatDateToMySQL(
-//             excelDateToJSDate(installTimeRaw)
-//           );
-//         } else if (typeof installTimeRaw === "string") {
-//           const [datePart, timePart] = installTimeRaw.split(" ");
-//           const [d, m, y] = datePart.split("/");
-//           installTime = `${y}-${m}-${d} ${timePart}:00`;
-//         }
-
-//         rows.push([
-//           campaignname,
-//           os,
-//           daterange,
-//           geo,
-//           row["Country Code"] || null,
-//           row["State"] || null,
-//           row["City"] || null,
-//           row["IP"] || null,
-//           row["Advertising ID"] || null,
-//           row["IDFA"] || null,
-//           row["User Agent"] || null,
-//           row["Device Model"] || null,
-//           installTime,
-//           row["Media Source"] || null,
-
-//           // FLAGS
-//           "yes",
-//           rtiMap.has(key) ? "yes" : "no",
-//           piMap.has(key) ? "yes" : "no",
-//           noeMap.has(key) ? "yes" : "no",
-//           peMap.has(key) ? "yes" : "no",
-
-//           // TIMES
-//           rtiMap.get(key) || null,
-//           piMap.get(key) || null,
-//           noeMap.get(key) || null,
-//           peMap.get(key) || null,
-//         ]);
-//       }
-//     }
-
-//     // ❗ Safety check
-//     if (rows.length === 0) {
-//       return res.status(400).json({ error: "No data found in install file" });
-//     }
-
-//     // ✅ STEP 4: Insert into DB
-//     const query = `
-//       INSERT INTO campaign_uploads (
-//         campaign_name, os, date_range, geo,
-//         country_code, state, city, ip,
-//         advertising_id, idfa, user_agent, device_model,
-//         install_time, media_source,
-
-//         noi, rti, pi, noe, pe,
-//         rti_time, pi_time, noe_time, pe_time
-//       ) VALUES ?
-//     `;
-
-//     const conn = await pool.getConnection();
-//     await conn.query(query, [rows]);
-//     conn.release();
-
-//     res.json({
-//       success: true,
-//       inserted: rows.length,
-//     });
-
-//   } catch (err) {
-//     console.error("ERROR:", err);
-//     res.status(500).json({ error: "Server error" });
-//   }
-// });
+// ✅ MAIN API
 app.post("/api/upload", upload.array("files"), async (req, res) => {
   const conn = await pool.getConnection();
 
@@ -646,7 +524,6 @@ app.post("/api/upload", upload.array("files"), async (req, res) => {
       }
     }
 
-    // ❗ Install required
     const installFiles = categorizedFiles.noi;
 
     if (!installFiles || installFiles.length === 0) {
@@ -678,9 +555,9 @@ app.post("/api/upload", upload.array("files"), async (req, res) => {
       ? parseMultipleFiles(categorizedFiles.pe, true)
       : new Map();
 
-    // ✅ Prepare rows
     const rows = [];
 
+    // ✅ Process install files
     for (const installFile of installFiles) {
       const workbook = XLSX.readFile(installFile.path);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -693,17 +570,11 @@ app.post("/api/upload", upload.array("files"), async (req, res) => {
 
         const key = `${campaignname}_${rawKey}`;
 
-        if (!key) continue;
+        const installTime = parseDateTime(row["Install Time"]);
 
-        let installTimeRaw = row["Install Time"];
-        let installTime = null;
-
-        if (typeof installTimeRaw === "number") {
-          installTime = formatDateToMySQL(excelDateToJSDate(installTimeRaw));
-        } else if (typeof installTimeRaw === "string") {
-          const [datePart, timePart] = installTimeRaw.split(" ");
-          const [d, m, y] = datePart.split("/");
-          installTime = `${y}-${m}-${d} ${timePart}:00`;
+        if (!installTime) {
+          console.log("❌ Invalid Install Time:", row["Install Time"]);
+          continue;
         }
 
         rows.push([
@@ -724,21 +595,21 @@ app.post("/api/upload", upload.array("files"), async (req, res) => {
           row["Media Source"] || null,
 
           "yes",
-          rtiMap.has(key) ? "yes" : "no",
-          piMap.has(key) ? "yes" : "no",
-          noeMap.has(key) ? "yes" : "no",
-          peMap.has(key) ? "yes" : "no",
+          rtiMap.has(rawKey) ? "yes" : "no",
+          piMap.has(rawKey) ? "yes" : "no",
+          noeMap.has(rawKey) ? "yes" : "no",
+          peMap.has(rawKey) ? "yes" : "no",
 
-          rtiMap.get(key) || null,
-          piMap.get(key) || null,
-          noeMap.get(key) || null,
-          peMap.get(key) || null,
+          rtiMap.get(rawKey) || null,
+          piMap.get(rawKey) || null,
+          noeMap.get(rawKey) || null,
+          peMap.get(rawKey) || null,
         ]);
       }
     }
 
     if (rows.length === 0) {
-      return res.status(400).json({ error: "No data found" });
+      return res.status(400).json({ error: "No valid data found" });
     }
 
     const query = `
@@ -748,12 +619,10 @@ INSERT INTO campaign_uploads (
   country_code, state, city, ip,
   advertising_id, idfa, user_agent, device_model,
   install_time, media_source,
-
   noi, rti, pi, noe, pe,
   rti_time, pi_time, noe_time, pe_time
 ) VALUES ?
 ON DUPLICATE KEY UPDATE
-
   os = VALUES(os),
   date_range = VALUES(date_range),
   geo = VALUES(geo),
@@ -764,30 +633,33 @@ ON DUPLICATE KEY UPDATE
   user_agent = VALUES(user_agent),
   device_model = VALUES(device_model),
   media_source = VALUES(media_source),
-
   install_time = COALESCE(campaign_uploads.install_time, VALUES(install_time)),
-
   noi = 'yes',
   rti = IF(VALUES(rti) = 'yes', 'yes', campaign_uploads.rti),
   pi  = IF(VALUES(pi) = 'yes', 'yes', campaign_uploads.pi),
   noe = IF(VALUES(noe) = 'yes', 'yes', campaign_uploads.noe),
   pe  = IF(VALUES(pe) = 'yes', 'yes', campaign_uploads.pe),
-
   rti_time = COALESCE(VALUES(rti_time), campaign_uploads.rti_time),
   pi_time  = COALESCE(VALUES(pi_time), campaign_uploads.pi_time),
   noe_time = COALESCE(VALUES(noe_time), campaign_uploads.noe_time),
   pe_time  = COALESCE(VALUES(pe_time), campaign_uploads.pe_time)
 `;
 
-    await conn.query(query, [rows]);
+    // ✅ BATCH INSERT (Fix 504)
+    const chunkSize = 1000;
+
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      await conn.query(query, [chunk]);
+    }
 
     res.json({
       success: true,
       processed: rows.length,
-      message: "Data inserted/updated successfully",
+      message: "Data inserted successfully 🚀",
     });
   } catch (err) {
-    console.error("ERROR:", err);
+    console.error("❌ ERROR:", err);
     res.status(500).json({ error: "Server error" });
   } finally {
     conn.release();
