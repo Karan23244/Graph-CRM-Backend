@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const csv = require("fast-csv");
 const pool = require("../config/db");
-const { processCampaignUploads } = require("../services/campaignUploadService");
+
 const FILE_MAP = {
   installs: "noi",
   "blocked-installs": "rti",
@@ -393,6 +393,7 @@ WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(1
 const handleUpload = async (req, res) => {
   try {
     const { campaignName, os, geo, dateRange, socketId } = req.body;
+    console.log(socketId);
     const fullCampaignName = campaignName;
     const baseCampaignName = campaignName.split(",")[0];
 
@@ -402,7 +403,6 @@ const handleUpload = async (req, res) => {
     }
 
     let uploaded = [];
-
     if (Array.isArray(req.files)) uploaded = req.files;
     else if (req.files) uploaded = Object.values(req.files).flat();
     else if (req.file) uploaded = [req.file];
@@ -410,11 +410,21 @@ const handleUpload = async (req, res) => {
     if (!campaignName || uploaded.length === 0) {
       return res.status(400).json({ msg: "Missing fields or files" });
     }
-  
+
+    console.log("📂 Fetching adv_data for campaign:", campaignName);
+    const advData = await getAdvDataFromDB(
+      baseCampaignName,
+      startDate,
+      endDate,
+      os,
+    );
     // ✅ Step 2: Fetch adv_data from 30 days before startDate
     const prev30Start = new Date(startDate);
     prev30Start.setDate(prev30Start.getDate() - 30);
     const prev30Str = prev30Start.toISOString().split("T")[0];
+    console.log(
+      `📅 Fetching additional adv_data from ${prev30Str} to ${startDate} (30 days before)`,
+    );
     const advDataPrev30 = await getAdvDataFromDB(
       baseCampaignName,
       prev30Str,
