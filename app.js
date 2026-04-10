@@ -956,9 +956,7 @@ ON DUPLICATE KEY UPDATE
       console.log("⚠️ Socket not connected or invalid:", socketId);
     }
 
-    res
-      .status(200)
-      .json({ msg: "Upload successful",  processed: rows.length});
+    res.status(200).json({ msg: "Upload successful", processed: rows.length });
     // res.json({
     //   success: true,
     //   processed: rows.length,
@@ -1002,6 +1000,40 @@ app.get("/api/campaign-data", async (req, res) => {
 //     console.error("❌ Notification cron error:", err);
 //   }
 // });
+
+app.get("/api/recentpid", async (req, res) => {
+  try {
+    let { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      endDate = dayjs().subtract(1, "day").format("YYYY-MM-DD");
+      startDate = dayjs().subtract(8, "day").format("YYYY-MM-DD");
+    }
+
+    console.log(`Fetching data from ${startDate} to ${endDate}`);
+
+    const query = `
+      SELECT 
+        campaign_name AS CampaignName,
+        COUNT(DISTINCT pid) AS TotalPIDs
+      FROM adv_data
+      WHERE STR_TO_DATE(shared_date, '%Y-%m-%d') BETWEEN ? AND ?
+      GROUP BY campaign_name
+      ORDER BY MAX(STR_TO_DATE(shared_date, '%Y-%m-%d')) DESC
+    `;
+
+    const [rows] = await pool.execute(query, [startDate, endDate]);
+
+    res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("❌ API ERROR:", err);
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+});
+
 const PORT = process.env.PORT || 2001;
 server.listen(PORT, () => {
   console.log(`🚀 Server + Socket.IO running on http://localhost:${PORT}`);

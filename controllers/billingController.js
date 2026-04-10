@@ -361,110 +361,61 @@ ORDER BY campaign_key;
 ===================================================== */
 
 exports.getPublisherExternalBilling = async (req, res) => {
-  const { pubid, month } = req.body;
-  console.log("Publisher External Billing Request:", pubid, month);
-  console.log("Request Body:", req.body);
+  const { pubid: pub_id, month } = req.body;
+
+  if (!pub_id || !month) {
+    return res.status(400).json({
+      success: false,
+      message: "pub_id and month are required",
+    });
+  }
+
   try {
-    // /**
-    //  * STEP 1: Resolve pub_id using username
-    //  */
-    // const [[publisher]] = await pool.query(
-    //   `
-    //   SELECT pub_id
-    //   FROM publids
-    //   WHERE username = ?
-    //   `,
-    //   [pubid],
-    // );
+    const sql = `
+      SELECT
+        id,
+        adv_data_id,
+        pid,
+        campaign_id,
+        pub_id,
+        shared_date,
 
-    // if (!publisher) {
-    //   return res.status(404).json({ message: "Publisher not found" });
-    // }
+        campaign_name,
+        geo,
+        os,
+        payable_event,
+        pay_out,
+        adv_total_no,
+        pub_Apno,
+        vertical,
 
-    const pub_id = pubid;
+        CASE 
+          WHEN is_verified = 2 THEN 'locked'
+          WHEN is_verified = 1 THEN 'verified'
+          ELSE 'unverified'
+        END AS status
 
-    /**
-     * STEP 2: Fetch ONLY verified or locked publisher billing snapshots
-     * - No adv_data
-     * - Only publisher_billing + pid_billing
-     */
-    const [rows] = await pool.query(
-      `
-SELECT
-  CONCAT(
-    pb.campaign_name, ' - ',
-    GROUP_CONCAT(DISTINCT pb.os ORDER BY pb.os SEPARATOR ','),
-    ' - ',
-    pb.geo
-  ) AS campaign_key,
+      FROM pub_data_verified
 
-  pb.campaign_name,
-  GROUP_CONCAT(DISTINCT pb.os ORDER BY pb.os SEPARATOR ',') AS os,
-  pb.geo,
-  pb.payable_event,
-  pb.pub_payout AS payout_rate,
+      WHERE pub_id = ?
+        AND DATE_FORMAT(shared_date, '%Y-%m') = ?
 
-  SUM(pb.adv_total_number) AS total_no,
-  SUM(pb.pub_apno) AS approved_no,
-  SUM(pb.pub_apno * pb.pub_payout) AS payout,
+      ORDER BY campaign_id, pid;
+    `;
 
-  pb.status,
+    const [rows] = await pool.query(sql, [pub_id, month]);
 
-  COALESCE(
-    JSON_ARRAYAGG(
-      JSON_OBJECT(
-        'pid', pp.pid,
-        'total_no', pp.adv_total_number,
-        'approved_no', pp.pub_apno,
-        'payout_amount', (pp.pub_apno * pb.pub_payout)
-      )
-    ),
-    JSON_ARRAY()
-  ) AS pid_data
-
-FROM publisher_billing pb
-
-LEFT JOIN publisher_billing_pid pp
-  ON pp.billing_id = pb.id
-
-WHERE pb.pub_id = ?
-  AND pb.month = ?
-  AND pb.status IN ('verified', 'locked')
-
-GROUP BY
-  pb.campaign_name,
-  pb.geo,
-  pb.payable_event,
-  pb.pub_payout,
-  pb.status
-
-ORDER BY campaign_key;
-  `,
-      [pub_id, month],
-    );
-    /**
-     * STEP 3: Totals (only verified)
-     */
-    const totals = rows.reduce(
-      (acc, r) => {
-        if (r.status !== "verified") return acc;
-        acc.approved_no += Number(r.pub_approved_no || 0);
-        acc.payout += Number(r.payout_amount || 0);
-        return acc;
-      },
-      { approved_no: 0, payout: 0 },
-    );
-
-    res.json({
-      data: rows.map((r) => ({
-        ...r,
-        locked: r.status === "locked",
-      })),
-      totals,
+    return res.json({
+      success: true,
+      data: rows,
     });
   } catch (err) {
     console.error("Publisher external billing error:", err);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({
+      success: false,
+      message: "DB error",
+      error: err.message,
+    });
   }
 };
 

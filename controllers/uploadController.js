@@ -4,7 +4,7 @@ const fs = require("fs");
 const path = require("path");
 const csv = require("fast-csv");
 const pool = require("../config/db");
-
+const { processCampaignUploads } = require("../services/campaignUploadService");
 const FILE_MAP = {
   installs: "noi",
   "blocked-installs": "rti",
@@ -412,6 +412,18 @@ const handleUpload = async (req, res) => {
     }
 
     console.log("📂 Fetching adv_data for campaign:", campaignName);
+    // 🔥 CALL HERE
+    const rowsInsertedUploads = await processCampaignUploads({
+      files: uploaded,
+      campaignname: campaignName,
+      os,
+      daterange: dateRange,
+      geo,
+      conn: pool, // use same DB connection
+    });
+
+    console.log("✅ campaign_uploads inserted:", rowsInsertedUploads);
+
     const advData = await getAdvDataFromDB(
       baseCampaignName,
       startDate,
@@ -509,61 +521,7 @@ const handleUpload = async (req, res) => {
         const hasNoiFile = uploaded.some((f) =>
           f.originalname.toLowerCase().includes("installs"),
         );
-        // const hasNoeFile = uploaded.some(f =>
-        //   f.originalname.toLowerCase().includes("in-app-event")
-        // );
 
-        // if (metricName === "clicks") {
-        //   // normal clicks
-        //   const clicksKey = headers.find((c) => /clicks?/i.test(c));
-        //   const clicksVal = clicksKey
-        //     ? Number((row[clicksKey] || "").toString().replace(/,/g, "")) || 0
-        //     : 0;
-        //   incIfPidDate(metricCounts.clicks, pid, metricsDate, clicksVal);
-
-        //   // ✅ fallback NOI only if NO installs file uploaded at all
-        //   if (!hasNoiFile) {
-        //     const noiKey = headers.find((c) => /installsappsflyer/i.test(c));
-        //     if (noiKey) {
-        //       const noiVal =
-        //         Number((row[noiKey] || "").toString().replace(/,/g, "")) || 0;
-        //       incIfPidDate(metricCounts.noi, pid, metricsDate, noiVal);
-        //       console.log(
-        //         `📊 [Fallback NOI] PID=${pid}, date=${metricsDate}, val=${noiVal}`
-        //       );
-        //     }
-        //   }
-
-        //   // Normalize headers (lowercase, remove spaces/dashes/underscores)
-        //   const normalize = (str) => str.toLowerCase().replace(/[\s\-_]/g, "");
-        //   const normHeaders = headers.map((h) => normalize(h));
-
-        //   // ✅ fallback NOE only if NO in-app-event file uploaded
-        //   // if (!hasNoeFile) {
-        //   //   const idx = normHeaders.findIndex((h) =>
-        //   //     h.includes("uniqueusersltvdayscumulativeappsflyer")
-        //   //   );
-        //   //   if (idx !== -1) {
-        //   //     const noeKey = headers[idx];
-        //   //     const noeVal =
-        //   //       Number((row[noeKey] || "").toString().replace(/,/g, "")) || 0;
-        //   //     if (noeVal > 0) {
-        //   //       incIfPidDate(metricCounts.noe, pid, metricsDate, noeVal);
-        //   //       console.log(
-        //   //         `📊 [Fallback NOE] PID=${pid}, date=${metricsDate}, key=${noeKey}, value=${noeVal}`
-        //   //       );
-        //   //     } else {
-        //   //       console.log(
-        //   //         `⚠️ NOE fallback header found (${noeKey}) but value empty for PID=${pid}`
-        //   //       );
-        //   //     }
-        //   //   } else {
-        //   //     console.log("❌ No NOE fallback header found in clicks file");
-        //   //   }
-        //   // }
-
-        //   return;
-        // }
         if (metricName === "clicks") {
           // ---- Normalize headers once ----
           const normalizeHeader = (s) =>

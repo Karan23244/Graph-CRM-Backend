@@ -4,466 +4,199 @@ const pool = require("../config/db");
    FETCH PUBLISHER BILLING (SNAPSHOT / LIVE)
 ===================================================== */
 exports.getPublisherBillingData = async (req, res) => {
-  let { id: pub_id, month } = req.body;
-  month = month.trim();
+  const { id: pub_id, month } = req.body; // month = "2025-04"
+
+  if (!pub_id || !month) {
+    return res
+      .status(400)
+      .json({ success: false, message: "pub_id and month are required" });
+  }
+
+  // Derive date range from "YYYY-MM"
+  const [year, mon] = month.split("-");
+  const startDate = `${year}-${mon}-01`;
+  const endDate = new Date(year, Number(mon), 0).toISOString().slice(0, 10); // last day
+
+  const sql = `
+SELECT
+  a.id AS adv_data_id,
+  a.pid,
+  a.campaign_id,
+  a.pub_id,
+  a.shared_date,
+
+  COALESCE(v.campaign_name, a.campaign_name) AS campaign_name,
+  COALESCE(v.geo, a.geo) AS geo,
+  COALESCE(v.os, a.os) AS os,
+  COALESCE(v.payable_event, a.payable_event) AS payable_event,
+  COALESCE(v.pay_out, a.pay_out) AS pay_out,
+  COALESCE(v.adv_total_no, a.adv_total_no) AS adv_total_no,
+  COALESCE(v.pub_Apno, a.pub_Apno) AS pub_Apno,
+  COALESCE(v.vertical, a.vertical) AS vertical,
+
+CASE 
+  WHEN v.is_verified = 2 THEN 'locked'
+  WHEN v.is_verified = 1 THEN 'verified'
+  ELSE 'unverified'
+END AS status
+
+FROM adv_data a
+LEFT JOIN pub_data_verified v 
+  ON a.id = v.adv_data_id
+
+WHERE a.pub_id = ?
+  AND STR_TO_DATE(a.shared_date, '%Y-%m-%d') BETWEEN ? AND ?
+
+UNION
+
+-- 🔥 include standalone verified rows (like testpid)
+
+SELECT
+  v.adv_data_id,
+  v.pid,
+  v.campaign_id,
+  v.pub_id,
+  v.shared_date,
+
+  v.campaign_name,
+  v.geo,
+  v.os,
+  v.payable_event,
+  v.pay_out,
+  v.adv_total_no,
+  v.pub_Apno,
+  v.vertical,
+
+  CASE 
+  WHEN v.is_verified = 2 THEN 'locked'
+  WHEN v.is_verified = 1 THEN 'verified'
+  ELSE 'unverified'
+END AS status
+
+FROM pub_data_verified v
+
+WHERE v.adv_data_id IS NULL
+  AND v.pub_id = ?
+  AND STR_TO_DATE(v.shared_date, '%Y-%m-%d') BETWEEN ? AND ?
+
+ORDER BY campaign_id, pid;
+  `;
+
   try {
-    /* 0️⃣ snapshot exists? */
-    const [[exists]] = await pool.query(
-      `SELECT id FROM publisher_billing WHERE pub_id=? AND month=? LIMIT 1`,
-      [pub_id, month],
-    );
-
-    let data = [];
-
-    /* 1️⃣ FROM SNAPSHOT */
-    if (exists) {
-      const [rows] = await pool.query(
-        `
-        SELECT
-          b.id AS billing_id,
-           b.status, 
-          b.campaign_name,
-          b.vertical,
-          b.geo,
-          b.os,
-          b.payable_event,
-          b.pub_payout,
-
-          b.adv_total_number,
-          b.pub_apno,
-         ROUND((b.pub_apno * b.pub_payout), 2) AS payout_amount,
-          p.id AS pid_id,
-          p.pid,
-          p.os AS pid_os,
-          p.adv_total_number AS pid_total,
-          p.pub_apno AS pid_apno
-        FROM publisher_billing b
-        LEFT JOIN publisher_billing_pid p
-          ON p.billing_id = b.id
-        WHERE b.pub_id=? AND b.month=?
-        ORDER BY b.created_at DESC, b.campaign_name, p.pid
-        `,
-        [pub_id, month],
-      );
-
-      const map = {};
-      for (const r of rows) {
-        if (!map[r.billing_id]) {
-          map[r.billing_id] = {
-            billing_id: r.billing_id,
-            status: r.status,
-            campaign_name: r.campaign_name,
-            vertical: r.vertical,
-            geo: r.geo,
-            os: r.os,
-            payable_event: r.payable_event,
-            pub_payout: r.pub_payout,
-            adv_total_number: r.adv_total_number,
-            pub_apno: r.pub_apno,
-            payout_amount: r.payout_amount,
-            pid_data: [],
-          };
-        }
-
-        if (r.pid) {
-          map[r.billing_id].pid_data.push({
-            id: r.pid_id,
-            pid: r.pid,
-            os: r.pid_os,
-            adv_total_number: r.pid_total,
-            pub_apno: r.pid_apno,
-            payout_amount: Number(
-              (Number(r.pid_apno || 0) * Number(r.pub_payout || 0)).toFixed(2),
-            ),
-          });
-        }
-      }
-
-      data = Object.values(map);
-    }
-
-    /* 2️⃣ LIVE (from adv_data only if no snapshot) */
-    if (!exists) {
-      const [summary] = await pool.query(
-        `
-        SELECT
-          campaign_name,
-          geo,
-          vertical,
-          GROUP_CONCAT(DISTINCT os) AS os,
-          payable_event,
-          CAST(pay_out AS DECIMAL(10,2)) AS pub_payout,
-          SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS adv_total_number,
-          SUM(CAST(pub_Apno AS DECIMAL(12,2))) AS pub_apno
-        FROM adv_data
-        WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
-        GROUP BY campaign_name, geo,vertical, payable_event, CAST(pay_out AS DECIMAL(10,2))
-        `,
-        [pub_id, month],
-      );
-
-      const [pidRows] = await pool.query(
-        ` 
-        SELECT      
-        campaign_name, geo, os, payable_event, pid,
-        vertical,
-        CAST(pay_out AS DECIMAL(10,2)) AS pub_payout,
-        SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS adv_total_number,
-        SUM(CAST(pub_Apno AS DECIMAL(12,2))) AS pub_apno
-        FROM adv_data
-        WHERE pub_id=? AND shared_date LIKE CONCAT(?, '%')
-        GROUP BY campaign_name, geo, os,vertical, payable_event, CAST(pay_out AS DECIMAL(10,2)), pid
-        `,
-        [pub_id, month],
-      );
-
-      data = summary.map((s) => ({
-        ...s,
-        payout_amount:
-          s.pub_apno === null
-            ? null
-            : Number(
-                (Number(s.pub_apno || 0) * Number(s.pub_payout || 0)).toFixed(
-                  2,
-                ),
-              ),
-        pid_data: pidRows
-          .filter(
-            (p) =>
-              p.campaign_name === s.campaign_name &&
-              p.geo === s.geo &&
-              p.vertical === s.vertical &&
-              p.payable_event === s.payable_event &&
-              p.os &&
-              s.os.includes(p.os) &&
-              Number(p.pub_payout) === Number(s.pub_payout),
-          )
-          .map((p) => ({
-            pid: p.pid,
-            os: p.os,
-            adv_total_number: p.adv_total_number,
-            pub_apno: p.pub_apno,
-            payout_amount:
-              p.pub_apno === null
-                ? null
-                : Number(
-                    (
-                      Number(p.pub_apno || 0) * Number(p.pub_payout || 0)
-                    ).toFixed(2),
-                  ),
-          })),
-      }));
-    }
-
-    /* 3️⃣ TOTALS */
-    const totals = data.reduce(
-      (a, r) => {
-        a.adv_total_number += Number(r.adv_total_number || 0);
-        a.pub_apno += Number(r.pub_apno || 0);
-        a.payout += Number(r.payout_amount || 0);
-        return a;
-      },
-      { adv_total_number: 0, pub_apno: 0, payout: 0 },
-    );
-
-    // round AFTER reduce (very important)
-    totals.adv_total_number = Number(totals.adv_total_number.toFixed(2));
-    totals.pub_apno = Number(totals.pub_apno.toFixed(2));
-    totals.payout = Number(totals.payout.toFixed(2));
-
-    res.json({
-      source: exists ? "snapshot" : "live",
-      data,
-      totals,
-    });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ message: "Server error" });
+    const [rows] = await pool.query(sql, [
+      pub_id,
+      startDate,
+      endDate,
+      pub_id,
+      startDate,
+      endDate, // for UNION
+    ]);
+    return res.json({ success: true, data: rows });
+  } catch (err) {
+    console.error("publisher-data error:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "DB error", error: err.message });
   }
 };
 /* =====================================================
    SAVE PUBLISHER BILLING
 ===================================================== */
 exports.savePublisherBilling = async (req, res) => {
-  const { pub_id, month, data } = req.body;
-  const conn = await pool.getConnection();
-  console.log("Data:", data);
-  try {
-    await conn.beginTransaction();
-    const billingIdMap = [];
-    const changedRows = [];
+  const {
+    adv_data_id,
+    pid,
+    campaign_id,
+    pub_id,
+    shared_date,
+    campaign_name,
+    geo,
+    os,
+    payable_event,
+    pay_out,
+    adv_total_no,
+    pub_Apno,
+    vertical,
+  } = req.body;
 
-    for (const row of data) {
-      let adv_total_number = null;
-      let pub_apno = null;
-
-      for (const p of row.pid_data || []) {
-        if (p.adv_total_number != null)
-          adv_total_number =
-            (adv_total_number ?? 0) + Number(p.adv_total_number);
-
-        if (p.pub_apno != null) pub_apno = (pub_apno ?? 0) + Number(p.pub_apno);
-      }
-
-      let billing_id = row.billing_id || null;
-
-      if (billing_id) {
-        const [[existing]] = await conn.query(
-          `SELECT id, adv_total_number, pub_apno
-     FROM publisher_billing
-     WHERE pub_id=? 
-     AND month=? 
-     AND campaign_name=? 
-     AND geo=? 
-     AND os=? 
-     AND vertical=?
-     AND payable_event=? 
-     AND pub_payout=? 
-     AND id <> ? 
-     LIMIT 1`,
-          [
-            pub_id,
-            month,
-            row.campaign_name,
-            row.geo,
-            row.os,
-            row.vertical,
-            row.payable_event,
-            row.pub_payout,
-            billing_id,
-          ],
-        );
-
-        if (existing) {
-          // 🔥 MERGE ROWS
-          await conn.query(
-            `UPDATE publisher_billing
-       SET 
-         adv_total_number = IFNULL(adv_total_number,0) + ?,
-         pub_apno = IFNULL(pub_apno,0) + ?
-       WHERE id=?`,
-            [adv_total_number || 0, pub_apno || 0, existing.id],
-          );
-
-          // move pid rows
-          await conn.query(
-            `UPDATE publisher_billing_pid
-       SET billing_id=?
-       WHERE billing_id=?`,
-            [existing.id, billing_id],
-          );
-
-          // delete duplicate row
-          await conn.query(`DELETE FROM publisher_billing WHERE id=?`, [
-            billing_id,
-          ]);
-
-          billing_id = existing.id;
-        } else {
-          // normal update
-          await conn.query(
-            `UPDATE publisher_billing
-       SET campaign_name=?, geo=?, vertical=?, os=?, payable_event=?,
-           pub_payout=?, adv_total_number=?, pub_apno=?
-       WHERE id=?`,
-            [
-              row.campaign_name,
-              row.geo,
-              row.vertical,
-              row.os,
-              row.payable_event,
-              row.pub_payout,
-              adv_total_number,
-              pub_apno,
-              billing_id,
-            ],
-          );
-        }
-      } else {
-        // check if identical campaign row already exists
-        const [[existing]] = await conn.query(
-          `SELECT id, adv_total_number, pub_apno
-   FROM publisher_billing
-   WHERE pub_id=? 
-   AND month=? 
-   AND campaign_name=? 
-   AND geo=? 
-   AND os=? 
-   AND vertical=?
-   AND payable_event=? 
-   AND pub_payout=? 
-   LIMIT 1`,
-          [
-            pub_id,
-            month,
-            row.campaign_name,
-            row.geo,
-            row.os,
-            row.vertical,
-            row.payable_event,
-            row.pub_payout,
-          ],
-        );
-
-        if (existing) {
-          // 🔥 MERGE INTO EXISTING ROW
-          await conn.query(
-            `UPDATE publisher_billing
-     SET 
-       adv_total_number = IFNULL(adv_total_number,0) + ?,
-       pub_apno = IFNULL(pub_apno,0) + ?
-     WHERE id=?`,
-            [adv_total_number || 0, pub_apno || 0, existing.id],
-          );
-
-          billing_id = existing.id;
-        } else {
-          // normal insert
-          const [result] = await conn.query(
-            `INSERT INTO publisher_billing
-     (
-       pub_id, month, vertical,
-       campaign_name, geo, os,
-       payable_event, pub_payout,
-       adv_total_number, pub_apno
-     )
-     VALUES (?,?,?,?,?,?,?,?,?,?)`,
-            [
-              pub_id,
-              month,
-              row.vertical,
-              row.campaign_name,
-              row.geo,
-              row.os,
-              row.payable_event,
-              row.pub_payout,
-              adv_total_number,
-              pub_apno,
-            ],
-          );
-
-          billing_id = result.insertId;
-        }
-      }
-
-      billingIdMap.push({ tmp_id: row._tmp_id || null, billing_id });
-      // ✅ TRACK UPDATED ROW
-      if (!changedRows.includes(billing_id)) {
-        changedRows.push(billing_id);
-      }
-      for (const p of row.pid_data || []) {
-        if (!p.pid) continue;
-
-        if (p.id) {
-          await conn.query(
-            `
-    UPDATE publisher_billing_pid
-    SET
-      pid = ?,
-      os = ?,
-      adv_total_number = ?,
-      pub_apno = ?
-    WHERE id = ?
-  `,
-            [p.pid, p.os, p.adv_total_number ?? null, p.pub_apno ?? null, p.id],
-          );
-        } else {
-          // ✅ INSERT new row
-          await conn.query(
-            `
-      INSERT INTO publisher_billing_pid
-      (billing_id, pid, os, adv_total_number, pub_apno)
-      VALUES (?,?,?,?,?)
-      `,
-            [
-              billing_id,
-              p.pid,
-              p.os,
-              p.adv_total_number ?? null,
-              p.pub_apno ?? null,
-            ],
-          );
-        }
-      }
-    }
-
-    await conn.commit();
-    if (!changedRows.length) {
-      return res.json({ success: true, billingIdMap, data: [] });
-    }
-
-    const [rows] = await conn.query(
+  // ── NEW: adv_data_id is optional now (manually added PIDs won't have one)
+  const sql = adv_data_id
+    ? `
+        INSERT INTO pub_data_verified
+          (adv_data_id, pid, campaign_id, pub_id, shared_date,
+           campaign_name, geo, os, payable_event, pay_out,
+           adv_total_no, pub_Apno, vertical, is_verified, verified_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
+        ON DUPLICATE KEY UPDATE
+          pid           = VALUES(pid),
+          campaign_id   = VALUES(campaign_id),
+          pub_id        = VALUES(pub_id),
+          shared_date   = VALUES(shared_date),
+          campaign_name = VALUES(campaign_name),
+          geo           = VALUES(geo),
+          os            = VALUES(os),
+          payable_event = VALUES(payable_event),
+          pay_out       = VALUES(pay_out),
+          adv_total_no  = VALUES(adv_total_no),
+          pub_Apno      = VALUES(pub_Apno),
+          vertical      = VALUES(vertical),
+          is_verified   = 1,
+          verified_at   = NOW();
       `
-  SELECT
-    b.id AS billing_id,
-    b.status,
-    b.campaign_name,
-    b.vertical,
-    b.geo,
-    b.os,
-    b.payable_event,
-    b.pub_payout,
+    : `
+        INSERT INTO pub_data_verified
+          (pid, campaign_id, pub_id, shared_date,
+           campaign_name, geo, os, payable_event, pay_out,
+           adv_total_no, pub_Apno, vertical, is_verified, verified_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW());
+      `;
 
-    b.adv_total_number,
-    b.pub_apno,
-    ROUND((b.pub_apno * b.pub_payout), 2) AS payout_amount,
+  const params = adv_data_id
+    ? [
+        adv_data_id,
+        pid,
+        campaign_id,
+        pub_id,
+        shared_date,
+        campaign_name,
+        geo,
+        os,
+        payable_event,
+        pay_out,
+        adv_total_no,
+        pub_Apno,
+        vertical,
+      ]
+    : [
+        pid,
+        campaign_id,
+        pub_id,
+        shared_date,
+        campaign_name,
+        geo,
+        os,
+        payable_event,
+        pay_out,
+        adv_total_no,
+        pub_Apno,
+        vertical,
+      ];
 
-    p.id AS pid_id,
-    p.pid,
-    p.os AS pid_os,
-    p.adv_total_number AS pid_total,
-    p.pub_apno AS pid_apno
+  try {
+    const [result] = await pool.query(sql, params);
 
-  FROM publisher_billing b
-  LEFT JOIN publisher_billing_pid p
-    ON p.billing_id = b.id
-  WHERE b.id IN (?)
-  ORDER BY b.created_at DESC, b.campaign_name, p.pid
-  `,
-      [changedRows],
-    );
-    const map = {};
-
-    for (const r of rows) {
-      if (!map[r.billing_id]) {
-        map[r.billing_id] = {
-          billing_id: r.billing_id,
-          status: r.status,
-          campaign_name: r.campaign_name,
-          vertical: r.vertical,
-          geo: r.geo,
-          os: r.os,
-          payable_event: r.payable_event,
-          pub_payout: r.pub_payout,
-          adv_total_number: r.adv_total_number,
-          pub_apno: r.pub_apno,
-          payout_amount: r.payout_amount,
-          pid_data: [],
-        };
-      }
-
-      if (r.pid) {
-        map[r.billing_id].pid_data.push({
-          id: r.pid_id,
-          pid: r.pid,
-          os: r.pid_os,
-          adv_total_number: r.pid_total,
-          pub_apno: r.pid_apno,
-          payout_amount: Number(
-            (Number(r.pid_apno || 0) * Number(r.pub_payout || 0)).toFixed(2),
-          ),
-        });
-      }
-    }
-    // same loop
-    const updatedData = Object.values(map);
-    res.json({ success: true, billingIdMap, data: updatedData });
-  } catch (e) {
-    console.error("PUBLISHER SAVE ERROR:", e);
-    await conn.rollback();
-    res.status(500).json({ success: false, error: e.message });
-  } finally {
-    conn.release();
+    // ── NEW: return the inserted id so the frontend can store it
+    return res.json({
+      success: true,
+      insertId: result.insertId || null,
+      title: "PID Verified",
+      message: `PID "${pid}" has been locked successfully.`,
+    });
+  } catch (err) {
+    console.error("publisher-verify-pid error:", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "DB error", error: err.message });
   }
 };
 /* =====================================================
@@ -473,11 +206,13 @@ exports.lockPublisherBilling = async (req, res) => {
   const { pub_id, month } = req.body;
 
   try {
+    // ✅ ONLY update pub_data_verified
     await pool.query(
       `
-      UPDATE publisher_billing
-      SET status='locked'
-      WHERE pub_id=? AND month=?
+      UPDATE pub_data_verified
+      SET is_verified = 2
+      WHERE pub_id = ?
+      AND DATE_FORMAT(shared_date, '%Y-%m') = ?
       `,
       [pub_id, month],
     );
