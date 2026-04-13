@@ -117,6 +117,7 @@ exports.savePublisherBilling = async (req, res) => {
     adv_total_no,
     pub_Apno,
     vertical,
+    billing_month,
   } = req.body;
 
   // ── NEW: adv_data_id is optional now (manually added PIDs won't have one)
@@ -125,8 +126,8 @@ exports.savePublisherBilling = async (req, res) => {
         INSERT INTO pub_data_verified
           (adv_data_id, pid, campaign_id, pub_id, shared_date,
            campaign_name, geo, os, payable_event, pay_out,
-           adv_total_no, pub_Apno, vertical, is_verified, verified_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW())
+           adv_total_no, pub_Apno, vertical, is_verified, verified_at,billing_month)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), ?)
         ON DUPLICATE KEY UPDATE
           pid           = VALUES(pid),
           campaign_id   = VALUES(campaign_id),
@@ -147,8 +148,8 @@ exports.savePublisherBilling = async (req, res) => {
         INSERT INTO pub_data_verified
           (pid, campaign_id, pub_id, shared_date,
            campaign_name, geo, os, payable_event, pay_out,
-           adv_total_no, pub_Apno, vertical, is_verified, verified_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW());
+           adv_total_no, pub_Apno, vertical, is_verified, verified_at, billing_month)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), ?);
       `;
 
   const params = adv_data_id
@@ -166,6 +167,7 @@ exports.savePublisherBilling = async (req, res) => {
         adv_total_no,
         pub_Apno,
         vertical,
+        billing_month,
       ]
     : [
         pid,
@@ -180,6 +182,7 @@ exports.savePublisherBilling = async (req, res) => {
         adv_total_no,
         pub_Apno,
         vertical,
+        billing_month,
       ];
 
   try {
