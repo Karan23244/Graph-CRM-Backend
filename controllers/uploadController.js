@@ -413,16 +413,16 @@ const handleUpload = async (req, res) => {
 
     console.log("📂 Fetching adv_data for campaign:", campaignName);
     // 🔥 CALL HERE
-    const rowsInsertedUploads = await processCampaignUploads({
-      files: uploaded,
-      campaignname: campaignName,
-      os,
-      daterange: dateRange,
-      geo,
-      conn: pool, // use same DB connection
-    });
+    // const rowsInsertedUploads = await processCampaignUploads({
+    //   files: uploaded,
+    //   campaignname: campaignName,
+    //   os,
+    //   daterange: dateRange,
+    //   geo,
+    //   conn: pool, // use same DB connection
+    // });
 
-    console.log("✅ campaign_uploads inserted:", rowsInsertedUploads);
+    // console.log("✅ campaign_uploads inserted:", rowsInsertedUploads);
 
     const advData = await getAdvDataFromDB(
       baseCampaignName,
