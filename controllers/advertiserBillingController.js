@@ -164,7 +164,7 @@ exports.getAdvertiserBillingData = async (req, res) => {
         pid_data: pidRows
           .filter(
             (p) =>
-              p.campaign_name === s.campaign_name &&
+              p.campaign_name.toLowerCase() === s.campaign_name.toLowerCase() &&
               p.geo === s.geo &&
               p.payable_event === s.payable_event &&
               (s.os || "").split(",").includes(p.os) &&
