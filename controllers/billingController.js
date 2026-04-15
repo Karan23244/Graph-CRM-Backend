@@ -362,7 +362,7 @@ ORDER BY campaign_key;
 
 exports.getPublisherExternalBilling = async (req, res) => {
   const { pubid: pub_id, month } = req.body;
-
+  console.log("Publisher External Billing Request:", { pub_id, month });
   if (!pub_id || !month) {
     return res.status(400).json({
       success: false,

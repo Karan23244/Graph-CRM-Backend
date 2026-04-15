@@ -1,6 +1,7 @@
 const express = require("express");
 const {
   getPublisherBillingData,
+  getoldPublisherBillingData,
   savePublisherBilling,
   lockPublisherBilling,
   verifyPublisherBillingRow,
@@ -9,6 +10,7 @@ const {
 const router = express.Router();
 
 router.post("/publisher-data", getPublisherBillingData);
+router.post("/publisher-old-data", getoldPublisherBillingData);
 router.post("/publisher-verify-pid", savePublisherBilling);
 router.post("/publisher-lock", lockPublisherBilling);
 router.post("/publisher-verify-row", verifyPublisherBillingRow);
