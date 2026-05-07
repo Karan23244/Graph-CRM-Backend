@@ -507,18 +507,18 @@ router.delete("/campaigndelete", async (req, res) => {
     // 1️⃣ Delete events first
     await pool.query(
       `DELETE ce
-       FROM campaign_event_metrics ce
-       JOIN campaign_metrics cm ON ce.campaign_id = cm.id
-       WHERE cm.campaign_name = ? 
-       AND (
-         CASE 
-           WHEN cm.metrics_date LIKE '%/%' 
-             THEN STR_TO_DATE(SUBSTRING_INDEX(cm.metrics_date, ' ', 1), '%d/%m/%y')
-           ELSE 
-             STR_TO_DATE(SUBSTRING_INDEX(cm.metrics_date, ' ', 1), '%Y-%m-%d')
-         END
-         BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
-       )`,
+   FROM campaign_event_metrics ce
+   JOIN campaign_metrics cm ON ce.campaign_metrics_id = cm.id
+   WHERE cm.campaign_name = ? 
+   AND (
+     CASE 
+       WHEN cm.metrics_date LIKE '%/%' 
+         THEN STR_TO_DATE(SUBSTRING_INDEX(cm.metrics_date, ' ', 1), '%d/%m/%y')
+       ELSE 
+         STR_TO_DATE(SUBSTRING_INDEX(cm.metrics_date, ' ', 1), '%Y-%m-%d')
+     END
+     BETWEEN STR_TO_DATE(?, '%Y-%m-%d') AND STR_TO_DATE(?, '%Y-%m-%d')
+   )`,
       [campaign_name, start_date, end_date],
     );
 

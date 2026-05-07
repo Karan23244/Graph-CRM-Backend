@@ -348,22 +348,70 @@ function extractDate(row, headers, metricName) {
 // ---------------------------
 // Fetch adv_data by campaign + dateRange
 // ---------------------------
+// async function getAdvDataFromDB(campaignName, startDate, endDate, os) {
+//   const [rows] = await pool.query(
+//     `SELECT pid, pub_id, pub_name, campaign_name, paused_date, flag, os
+// FROM adv_data
+// WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(13), '') =
+//       REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
+//   AND DATE(shared_date) BETWEEN ? AND ?
+//   AND os = ?;`,
+//     [campaignName, startDate, endDate, os],
+//   );
+
+//   const pidMap = new Map();
+//   for (const r of rows) {
+//     const pidKey = String(r.pid || "")
+//       .trim()
+//       .toLowerCase();
+//     if (!pidMap.has(pidKey)) {
+//       pidMap.set(pidKey, {
+//         pid: String(r.pid || "").trim(),
+//         pidLower: pidKey,
+//         pubid: String(r.pub_id || "").trim(),
+//         pubam: String(r.pub_name || "").trim(),
+//         campaign_name: r.campaign_name,
+//         pause: r.paused_date ? 1 : 0,
+//         nocrm: 0,
+//         os: r.os,
+//       });
+//     }
+//   }
+
+//   return Array.from(pidMap.values());
+// }
+
+// ==============================
+// 1. UPDATE getAdvDataFromDB()
+// ==============================
+
 async function getAdvDataFromDB(campaignName, startDate, endDate, os) {
   const [rows] = await pool.query(
-    `SELECT pid, pub_id, pub_name, campaign_name, paused_date, flag, os
-FROM adv_data
-WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(13), '') =
-      REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
-  AND DATE(shared_date) BETWEEN ? AND ?
-  AND os = ?;`,
+    `SELECT 
+        pid,
+        pub_id,
+        pub_name,
+        campaign_name,
+        paused_date,
+        flag,
+        os,
+        campaign_id,      -- ✅ NEW
+        shared_date       -- ✅ NEW
+     FROM adv_data
+     WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(13), '') =
+           REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
+       AND DATE(shared_date) BETWEEN ? AND ?
+       AND os = ?;`,
     [campaignName, startDate, endDate, os],
   );
 
   const pidMap = new Map();
+
   for (const r of rows) {
     const pidKey = String(r.pid || "")
       .trim()
       .toLowerCase();
+
     if (!pidMap.has(pidKey)) {
       pidMap.set(pidKey, {
         pid: String(r.pid || "").trim(),
@@ -371,6 +419,8 @@ WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(1
         pubid: String(r.pub_id || "").trim(),
         pubam: String(r.pub_name || "").trim(),
         campaign_name: r.campaign_name,
+        campaign_id: r.campaign_id, // ✅ NEW
+        shared_date: r.shared_date, // ✅ NEW
         pause: r.paused_date ? 1 : 0,
         nocrm: 0,
         os: r.os,
@@ -462,7 +512,27 @@ const handleUpload = async (req, res) => {
       clicks: new Map(),
     };
     const eventCountsByPidDate = new Map();
+    const eventTypeCounts = new Map();
 
+    const incEventCount = (pid, date, eventName, eventType, inc = 1) => {
+      if (!pid || !date || !eventName || !eventType) return;
+
+      if (!eventTypeCounts.has(pid)) {
+        eventTypeCounts.set(pid, new Map());
+      }
+
+      const dateMap = eventTypeCounts.get(pid);
+
+      if (!dateMap.has(date)) {
+        dateMap.set(date, new Map());
+      }
+
+      const eventMap = dateMap.get(date);
+
+      const key = `${eventType}__${eventName}`;
+
+      eventMap.set(key, (eventMap.get(key) || 0) + inc);
+    };
     const incIfPidDate = (map, pid, date, inc = 1) => {
       if (!pid || !date) return;
       if (!map.has(pid)) map.set(pid, new Map());
@@ -472,7 +542,55 @@ const handleUpload = async (req, res) => {
 
     // Track which files were uploaded
     const uploadedMetricNames = new Set();
+    // =========================================
+    // ADD BEFORE streamFileRows LOOP
+    // =========================================
 
+    const rawDateStore = {
+      install: new Map(), // pid -> date -> raw install time
+      event: new Map(), // pid -> date -> raw event time
+      clicks: new Map(), // pid -> date -> clicks date
+    };
+
+    function setNestedDate(map, pid, date, value) {
+      if (!map.has(pid)) map.set(pid, new Map());
+
+      const inner = map.get(pid);
+
+      // store first value only
+      if (!inner.has(date)) {
+        inner.set(date, value);
+      }
+    }
+    const [configRows] = await pool.query(
+      `
+  SELECT events
+  FROM campaign_configs
+  WHERE (
+    campaign_name = ? 
+    OR JSON_CONTAINS(campaign_name, JSON_ARRAY(?))
+  )
+  AND (os = ? OR os IS NULL OR os = '')
+  LIMIT 1;
+  `,
+      [fullCampaignName, fullCampaignName, os], // ✅ FIX
+    );
+
+    let allowedEvents = [];
+
+    if (configRows.length && configRows[0].events) {
+      try {
+        allowedEvents = JSON.parse(configRows[0].events);
+      } catch (e) {
+        allowedEvents = configRows[0].events
+          .split(",")
+          .map((e) => e.trim().toLowerCase());
+      }
+    }
+
+    allowedEvents = allowedEvents.map((e) => e.toLowerCase());
+
+    console.log("✅ Allowed Events:", allowedEvents);
     // ---------------------------
     // Process uploaded files
     // ---------------------------
@@ -544,7 +662,7 @@ const handleUpload = async (req, res) => {
           } else {
             incIfPidDate(metricCounts.clicks, pid, metricsDate, 0);
           }
-
+          setNestedDate(rawDateStore.clicks, pid, metricsDate, metricsDate);
           // ---- Fallback NOI (if installs file not uploaded, get from installs appsflyer column in clicks) ----
           if (!uploadedMetricNames.has("noi")) {
             const noiIdx = normHeaders.findIndex((c) =>
@@ -594,7 +712,7 @@ const handleUpload = async (req, res) => {
         if (metricName === "noi") {
           // Use Media Source + Install Time
           const mediaSourceKey = headers.find((c) => /media\s*source/i.test(c));
-          const installTimeKey = headers.find((c) => /install\s*time/i.test(c));
+          const installTimeKey = headers.find((c) => c === "installtime");
 
           const pid = mediaSourceKey
             ? (row[mediaSourceKey] || "").trim().toLowerCase()
@@ -611,29 +729,98 @@ const handleUpload = async (req, res) => {
 
           // Count 1 install per row
           incIfPidDate(metricCounts.noi, pid, metricsDate, 1);
-
+          setNestedDate(rawDateStore.install, pid, metricsDate, installTimeRaw);
           // Debug log
           console.log(`📊 [NOI] PID=${pid}, date=${metricsDate}, +1`);
           return;
         }
 
+        // if (metricName === "pe" || metricName === "noe") {
+        //   const evKey = headers.find((c) => /event[_\s]?name/i.test(c));
+        //   if (!eventCountsByPidDate.has(pid))
+        //     eventCountsByPidDate.set(pid, new Map());
+        //   const pidDateMap = eventCountsByPidDate.get(pid);
+        //   const dateMap = pidDateMap.get(metricsDate) || new Map();
+        //   if (evKey) {
+        //     const ev = String(row[evKey] || "")
+        //       .trim()
+        //       .toLowerCase();
+        //     dateMap.set(ev, (dateMap.get(ev) || 0) + 1);
+        //   }
+        //   pidDateMap.set(metricsDate, dateMap);
+        //   const eventTimeKey = headers.find((c) => /event\s*time/i.test(c));
+
+        //   const rawEventTime = eventTimeKey ? row[eventTimeKey] : null;
+
+        //   setNestedDate(rawDateStore.event, pid, metricsDate, rawEventTime);
+        //   incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
+        //   return;
+        // }
         if (metricName === "pe" || metricName === "noe") {
           const evKey = headers.find((c) => /event[_\s]?name/i.test(c));
-          if (!eventCountsByPidDate.has(pid))
+
+          const eventName = evKey
+            ? String(row[evKey] || "")
+                .trim()
+                .toLowerCase()
+            : null;
+
+          // store raw event counts
+          if (!eventCountsByPidDate.has(pid)) {
             eventCountsByPidDate.set(pid, new Map());
-          const pidDateMap = eventCountsByPidDate.get(pid);
-          const dateMap = pidDateMap.get(metricsDate) || new Map();
-          if (evKey) {
-            const ev = String(row[evKey] || "")
-              .trim()
-              .toLowerCase();
-            dateMap.set(ev, (dateMap.get(ev) || 0) + 1);
           }
-          pidDateMap.set(metricsDate, dateMap);
-          incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
+
+          const pidDateMap = eventCountsByPidDate.get(pid);
+
+          if (!pidDateMap.has(metricsDate)) {
+            pidDateMap.set(metricsDate, new Map());
+          }
+
+          const dateMap = pidDateMap.get(metricsDate);
+
+          if (eventName) {
+            dateMap.set(eventName, (dateMap.get(eventName) || 0) + 1);
+          }
+
+          // store raw event time
+          const eventTimeKey = headers.find((c) => /event\s*time/i.test(c));
+
+          const rawEventTime = eventTimeKey ? row[eventTimeKey] : null;
+
+          setNestedDate(rawDateStore.event, pid, metricsDate, rawEventTime);
+
+          // =========================
+          // NOE LOGIC
+          // =========================
+          if (
+            metricName === "noe" &&
+            eventName &&
+            allowedEvents.includes(eventName)
+          ) {
+            // total NOE count
+            incIfPidDate(metricCounts.noe, pid, metricsDate, 1);
+
+            // event-wise NOE count
+            incEventCount(pid, metricsDate, eventName, "noe", 1);
+          }
+
+          // =========================
+          // PE LOGIC
+          // =========================
+          if (
+            metricName === "pe" &&
+            eventName &&
+            allowedEvents.includes(eventName)
+          ) {
+            // total PE count
+            incIfPidDate(metricCounts.pe, pid, metricsDate, 1);
+
+            // event-wise PE count
+            incEventCount(pid, metricsDate, eventName, "pe", 1);
+          }
+
           return;
         }
-
         // default
         incIfPidDate(metricCounts[metricName], pid, metricsDate, 1);
       });
@@ -655,6 +842,8 @@ const handleUpload = async (req, res) => {
           pidLower: pid,
           pubid: "N/A",
           pubam: "N/A",
+          campaign_id: null,
+          shared_date: null,
           campaign_name: baseCampaignName,
           pause: 0,
           nocrm: 0,
@@ -677,7 +866,6 @@ const handleUpload = async (req, res) => {
     // Prepare DB inserts (per pid + date)
     // ---------------------------
     const metricsData = [];
-    const eventData = [];
 
     for (const d of mergedAdvData) {
       const pidLower = d.pidLower;
@@ -718,6 +906,8 @@ const handleUpload = async (req, res) => {
 
         metricsData.push([
           fullCampaignName,
+          d.campaign_id,
+          d.shared_date,
           os,
           geo,
           date,
@@ -732,14 +922,11 @@ const handleUpload = async (req, res) => {
           metrics.clicks,
           d.pause,
           d.nocrm,
-        ]);
 
-        const pidEvents =
-          eventCountsByPidDate.get(pidLower)?.get(date) || new Map();
-        for (const [eventName, count] of pidEvents.entries()) {
-          // store with metrics_date in events table (so it's also date keyed)
-          eventData.push([d.pid, date, eventName, count, "event"]);
-        }
+          rawDateStore.install.get(pidLower)?.get(date) || null,
+          rawDateStore.event.get(pidLower)?.get(date) || null,
+          rawDateStore.clicks.get(pidLower)?.get(date) || null,
+        ]);
       }
     }
 
@@ -747,26 +934,95 @@ const handleUpload = async (req, res) => {
     // Insert into DB
     // ---------------------------
     const sqlMetrics = `
-      INSERT INTO campaign_metrics
-      (campaign_name, os, geo, metrics_date, pubam, pid, pubid,
-       noi, rti, pe, pi, noe, clicks, is_paused, nocrm)
-      VALUES ?
-      ON DUPLICATE KEY UPDATE
-        noi = VALUES(noi),
-        rti = VALUES(rti),
-        pe = VALUES(pe),
-        pi = VALUES(pi),
-        noe = VALUES(noe),
-        clicks = VALUES(clicks),
-        is_paused = VALUES(is_paused),
-        nocrm = VALUES(nocrm)
-    `;
-    await batchInsert(sqlMetrics, metricsData, 500);
+  INSERT INTO campaign_metrics_new
+  (
+    campaign_name,
+    campaign_id,
+    shared_date,
+    os,
+    geo,
+    metrics_date,
+    pubam,
+    pid,
+    pubid,
+    noi,
+    rti,
+    pe,
+    pi,
+    noe,
+    clicks,
+    is_paused,
+    nocrm,
 
+    install_time,
+    event_time,
+    clicks_date
+  )
+  VALUES ?
+  ON DUPLICATE KEY UPDATE
+    noi = VALUES(noi),
+    rti = VALUES(rti),
+    pe = VALUES(pe),
+    pi = VALUES(pi),
+    noe = VALUES(noe),
+    clicks = VALUES(clicks),
+    install_time = VALUES(install_time),
+    event_time = VALUES(event_time),
+    clicks_date = VALUES(clicks_date),
+    is_paused = VALUES(is_paused),
+    nocrm = VALUES(nocrm),
+    shared_date = VALUES(shared_date)
+`;
+    await batchInsert(sqlMetrics, metricsData, 500);
+    // 🔥 Build mapping: (pid + date) → campaign_metrics_id
+    const [cmRows] = await pool.query(
+      `
+  SELECT id, pid, metrics_date 
+  FROM campaign_metrics_new 
+  WHERE campaign_name = ?
+`,
+      [fullCampaignName],
+    );
+
+    const cmMap = new Map();
+
+    for (const row of cmRows) {
+      const key = `${row.pid}_${row.metrics_date}`;
+      cmMap.set(key, row.id);
+    }
+    const eventData = [];
+
+    for (const d of mergedAdvData) {
+      const pidLower = d.pidLower;
+
+      const pidDateMap = eventTypeCounts.get(pidLower);
+
+      if (!pidDateMap) continue;
+
+      for (const [date, eventMap] of pidDateMap.entries()) {
+        for (const [compoundKey, count] of eventMap.entries()) {
+          const [eventType, eventName] = compoundKey.split("__");
+
+          const key = `${d.pid}_${date}`;
+
+          const campaignMetricsId = cmMap.get(key) || null;
+
+          eventData.push([
+            d.pid,
+            date,
+            eventName,
+            count,
+            eventType,
+            campaignMetricsId,
+          ]);
+        }
+      }
+    }
     if (eventData.length > 0) {
       const sqlEvents = `
-        INSERT INTO campaign_event_metrics (pid, metrics_date, event_name, count, event_type)
-        VALUES ?
+      INSERT INTO campaign_event_metrics_new
+(pid, metrics_date, event_name, count, event_type, campaign_metrics_id)
+VALUES ?
         ON DUPLICATE KEY UPDATE count = VALUES(count), event_type = VALUES(event_type)
       `;
       await batchInsert(sqlEvents, eventData, 500);

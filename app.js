@@ -11,6 +11,11 @@ const publisherBillingRoutes = require("./routes/publisherBillingRoutes");
 const billingRoutes = require("./routes/billingRoutes");
 const publisherAccountRoutes = require("./routes/publisherAccountRoutes");
 const advertiserAccountRoutes = require("./routes/advertiserAccountRoutes");
+const campaignConfigRoutes = require("./routes/campaignConfigRoutes");
+const reportRoutes = require("./routes/reportRoutes");
+const campaignAnalyticsRoutes = require("./routes/campaignAnalyticsRoutes");
+const decisionEngineRoutes = require("./routes/decisionEngineRoutes");
+// const campaignRoutes = require("./routes/campaignRoutes");
 const router = express.Router();
 const http = require("http");
 const multer = require("multer");
@@ -39,8 +44,8 @@ const io = new Server(server, {
 
 // ✅ Attach `io` to the app BEFORE routes
 app.set("io", io);
-// app.use(cors());
-// app.use(express.json());
+app.use(cors());
+app.use(express.json());
 
 //  ^|^e CORS FIRST
 
@@ -59,6 +64,11 @@ app.use("/api/billing", advertiserBillingRoutes);
 app.use("/api/billing", publisherBillingRoutes);
 app.use("/api/advertiser", advertiserAccountRoutes);
 app.use("/api/publisher", publisherAccountRoutes);
+app.use("/api", campaignConfigRoutes);
+app.use("/api", reportRoutes);
+app.use("/api", campaignAnalyticsRoutes);
+app.use("/api", decisionEngineRoutes);
+
 // Helper: fetch campaign conditions; if not present, fall back to __DEFAULT__
 app.get("/api/zone-conditions/:campaign", async (req, res) => {
   const campaign = req.params.campaign;
