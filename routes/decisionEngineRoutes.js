@@ -15,7 +15,7 @@
 
 const express    = require('express');
 const router     = express.Router();
-const { getDecision } = require('../controllers/DecisionengineController.js');
+const { getDecision } = require('../controllers/decisionEngineController.js');
 
 router.post('/decision', getDecision);
 
