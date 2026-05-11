@@ -178,56 +178,99 @@ exports.getAdvertiserAccount = async (req, res) => {
   }
 };
 
-// UPDATE advertiser account
+// // UPDATE advertiser account
+// exports.updateAdvertiserAccount = async (req, res) => {
+//   const {
+//     adv_id,
+//     month,
+//     payment_terms,
+//     payment_status,
+//     amount_raised,
+//     invoice_number,
+//     invoice_date,
+//     invoice_from,
+//     invoice_to,
+//     currency,
+//     payment_date,
+//   } = req.body;
+
+//   try {
+//     await pool.query(
+//       `
+//       UPDATE advertiser_account
+//       SET 
+//         payment_terms = ?,
+//         payment_status = ?,
+//         amount_raised = ?,
+//         invoice_number = ?,
+//         invoice_date = ?,
+//         invoice_from = ?,
+//         invoice_to = ?,
+//         currency = ?,
+//         payment_date = ?
+//       WHERE adv_id = ? AND month = ?
+//       `,
+//       [
+//         payment_terms,
+//         payment_status,
+//         amount_raised,
+//         invoice_number,
+//         invoice_date,
+//         invoice_from,
+//         invoice_to,
+//         currency,
+//         payment_date,
+//         adv_id,
+//         month,
+//       ],
+//     );
+
+//     res.json({ message: "Updated Successfully" });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ error: "Update failed" });
+//   }
+// };
+
 exports.updateAdvertiserAccount = async (req, res) => {
-  const {
-    adv_id,
-    month,
-    payment_terms,
-    payment_status,
-    amount_raised,
-    invoice_number,
-    invoice_date,
-    invoice_from,
-    invoice_to,
-    currency,
-    payment_date,
-  } = req.body;
+  const { adv_id, month, ...fields } = req.body;
 
   try {
+    // remove undefined values
+    Object.keys(fields).forEach((key) => {
+      if (fields[key] === undefined) {
+        delete fields[key];
+      }
+    });
+
+    const keys = Object.keys(fields);
+
+    if (!keys.length) {
+      return res.status(400).json({
+        error: "No fields provided",
+      });
+    }
+
+    const setClause = keys.map((key) => `${key} = ?`).join(", ");
+
+    const values = keys.map((key) => fields[key]);
+
     await pool.query(
       `
       UPDATE advertiser_account
-      SET 
-        payment_terms = ?,
-        payment_status = ?,
-        amount_raised = ?,
-        invoice_number = ?,
-        invoice_date = ?,
-        invoice_from = ?,
-        invoice_to = ?,
-        currency = ?,
-        payment_date = ?
+      SET ${setClause}
       WHERE adv_id = ? AND month = ?
       `,
-      [
-        payment_terms,
-        payment_status,
-        amount_raised,
-        invoice_number,
-        invoice_date,
-        invoice_from,
-        invoice_to,
-        currency,
-        payment_date,
-        adv_id,
-        month,
-      ],
+      [...values, adv_id, month],
     );
 
-    res.json({ message: "Updated Successfully" });
+    res.json({
+      message: "Updated Successfully",
+    });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Update failed" });
+    res.status(500).json({
+      error: "Update failed",
+    });
   }
 };
