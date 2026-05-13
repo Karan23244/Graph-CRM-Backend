@@ -48,6 +48,24 @@ async function streamXlsxRows(filePath, onRow) {
     await onRow(rowObj, headers);
   }
 }
+function formatEventDateTime(value) {
+  if (!value) return null;
+
+  const match = String(value).match(
+    /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})$/,
+  );
+
+  if (!match) return null;
+
+  let [, dd, mm, yyyy, hh, min] = match;
+
+  // convert 2-digit year → 20xx
+  if (yyyy.length === 2) {
+    yyyy = `20${yyyy}`;
+  }
+
+  return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")} ${hh.padStart(2, "0")}:${min}:00`;
+}
 // --- Add this helper at the top of your file ---
 function formatLocalDate(date) {
   if (!(date instanceof Date) || isNaN(date)) return null;
@@ -558,7 +576,7 @@ const handleUpload = async (req, res) => {
       const inner = map.get(pid);
 
       // store first value only
-      if (!inner.has(date)) {
+      if (!inner.has(date) || !inner.get(date)) {
         inner.set(date, value);
       }
     }
@@ -785,8 +803,12 @@ const handleUpload = async (req, res) => {
           // store raw event time
           const eventTimeKey = headers.find((c) => /event\s*time/i.test(c));
 
-          const rawEventTime = eventTimeKey ? row[eventTimeKey] : null;
-
+          const rawEventTime = eventTimeKey
+            ? formatEventDateTime(row[eventTimeKey])
+            : null;
+          console.log(
+            `📅 [${metricName.toUpperCase()}] Extracted event time for PID=${pid}, date=${metricsDate} → raw="${row[eventTimeKey]}" → formatted="${rawEventTime}"`,
+          );
           setNestedDate(rawDateStore.event, pid, metricsDate, rawEventTime);
 
           // =========================

@@ -187,10 +187,11 @@ async function fetchEventMetricsAllWindows(
 
     FROM campaign_event_metrics_new cem
     INNER JOIN campaign_metrics_new cm ON cm.id = cem.campaign_metrics_id
-    WHERE LOWER(cm.campaign_name) = LOWER(?)
-      AND LOWER(cm.os) = LOWER(?)
-      AND cem.event_name IN (${evPlaceholders})
-      AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date)) BETWEEN ? AND ?
+WHERE LOWER(cm.campaign_name) = LOWER(?)
+  AND LOWER(cm.os) = LOWER(?)
+  AND cem.event_name IN (${evPlaceholders})
+  AND cem.event_type = 'noe'
+  AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date)) BETWEEN ? AND ?
 
     GROUP BY cm.pid, cem.event_name, cem.event_type
   `;
