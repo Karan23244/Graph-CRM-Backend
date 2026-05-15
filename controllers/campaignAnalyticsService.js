@@ -74,39 +74,39 @@ async function fetchMetricsAllWindows(campaignName, os, windows) {
       MAX(cm.is_paused) AS is_paused,
 
       /* MTD aggregates */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS mtd_clicks,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS mtd_installs,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS mtd_rti,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS mtd_pi,
 
       /* Primary window (7D) */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS primary_clicks,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS primary_installs,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS primary_rti,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS primary_pi,
 
       /* Secondary window (3D) */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS secondary_clicks,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS secondary_installs,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS secondary_rti,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS secondary_pi
 
     FROM campaign_metrics_new cm
     WHERE LOWER(cm.campaign_name) = LOWER(?)
       AND LOWER(cm.os) = LOWER(?)
-      AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date)) BETWEEN ? AND ?
+      AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date)) BETWEEN ? AND ?
 
     GROUP BY cm.pubam, cm.pubid, cm.pid
   `;
@@ -174,15 +174,15 @@ async function fetchEventMetricsAllWindows(
       cem.event_type,
 
       /* MTD */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS mtd_count,
 
       /* Primary */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS primary_count,
 
       /* Secondary */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date))
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
                     BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS secondary_count
 
     FROM campaign_event_metrics_new cem
@@ -190,8 +190,7 @@ async function fetchEventMetricsAllWindows(
 WHERE LOWER(cm.campaign_name) = LOWER(?)
   AND LOWER(cm.os) = LOWER(?)
   AND cem.event_name IN (${evPlaceholders})
-  AND cem.event_type = 'noe'
-  AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date)) BETWEEN ? AND ?
+  AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date)) BETWEEN ? AND ?
 
     GROUP BY cm.pid, cem.event_name, cem.event_type
   `;
@@ -256,9 +255,6 @@ async function getCampaignAnalytics(payload) {
 
   const primaryDays = parseInt(rawWindows.primary) || 7;
   const secondaryDays = parseInt(rawWindows.secondary) || 3;
-  console.log(
-    `Received analytics request for campaign=${campaign_name}, os=${os}, start_date=${start_date}, end_date=${end_date}, primaryDays=${primaryDays}, secondaryDays=${secondaryDays}`,
-  );
   // ── Step 1: Config ───────────────────────────────────────────────────────
   const config = await fetchCampaignConfig(campaign_name, os);
   if (!config) {
@@ -314,7 +310,6 @@ async function getCampaignAnalytics(payload) {
     const coloredMtd = applyColors(kpiMtd, rule1, rule2, eventKeys);
     const coloredPrimary = applyColors(kpiPrimary, rule1, rule2, eventKeys);
     const coloredSecondary = applyColors(kpiSecondary, rule1, rule2, eventKeys);
-
     // PID classification (based on MTD traffic)
     const pidColor = classifyPID(
       {
@@ -517,7 +512,29 @@ function flattenRow({
       ) {
         continue;
       }
+      // format PAE fields (show count + percentage)
+      if (key.startsWith("pae_")) {
+        const eKey = key.replace("pae_", "");
 
+        // pae value may be object after applyColors
+        const peCount = getValue(val);
+
+        // E1/E2 count
+        const totalEventCount = getValue(data[`${eKey}_count`]);
+
+        // percentage
+        const pePercent =
+          totalEventCount > 0
+            ? ((peCount / totalEventCount) * 100).toFixed(2)
+            : "0.00";
+
+        row[`${key}_${suffix}`] = `${peCount} (${pePercent}%)`;
+
+        // use pae color rule
+        row[`${key}_${suffix}_color`] = val?.color || "green";
+
+        continue;
+      }
       if (typeof val === "object" && val !== null && "value" in val) {
         row[`${key}_${suffix}`] = val.value;
         row[`${key}_${suffix}_color`] = val.color;
@@ -526,6 +543,7 @@ function flattenRow({
       }
     }
   };
+
   attach(mtd, "mtd");
   attach(primary, primaryLabel);
   attach(secondary, secondaryLabel);

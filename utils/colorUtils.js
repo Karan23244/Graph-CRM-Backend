@@ -77,13 +77,23 @@ function applyColors(kpis, rule1, rule2, eventKeys) {
 
   // Dynamic event KPIs
   eventKeys.forEach((eKey, idx) => {
-    const ruleKeyIdx = idx + 1; // E1 → ITE1, E2 → ITE2
+    const ruleKeyIdx = idx + 1;
+
     result[`${eKey}_count`] = kpis[`${eKey}_count`];
+
     result[`cr_${eKey}`] = withColor(
       kpis[`cr_${eKey}`],
       rule1?.[`ITE${ruleKeyIdx}`],
     );
-    result[`pa_${eKey}`] = withColor(kpis[`pa_${eKey}`], rule2?.["PA E2"]);
+
+    // percentage color
+    result[`pa_${eKey}`] = withColor(kpis[`pa_${eKey}`], rule2?.[`PA ${eKey}`]);
+
+    // pae count
+    result[`pae_${eKey}`] = withColor(
+      kpis[`pae_${eKey}`],
+      rule2?.[`PAE${ruleKeyIdx}`],
+    );
   });
 
   return result;

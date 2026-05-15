@@ -43,13 +43,21 @@ function computeKPIs(agg, eventKeys) {
   // Dynamic event KPIs
   for (const eKey of eventKeys) {
     const eData = agg.events?.[eKey] || { noe: 0, pe: 0 };
-    const noeVal = int(eData.noe); // organic event count
-    const peVal = int(eData.pe); // paid event count
+
+    const noeVal = int(eData.noe); // E1 / E2
+    const peVal = int(eData.pe); // PAE1 / PAE2
+
     const total = noeVal + peVal;
 
+    // existing logic (KEEP)
     kpis[`${eKey}_count`] = total;
-    kpis[`cr_${eKey}`] = pct(total, installs); // Conversion Rate
-    kpis[`pa_${eKey}`] = pct(peVal, total); // PA % for this event
+    kpis[`cr_${eKey}`] = pct(total, installs);
+
+    // change this formula
+    kpis[`pa_${eKey}`] = pct(peVal, noeVal);
+
+    // NEW → raw paid event count
+    kpis[`pae_${eKey}`] = peVal;
   }
 
   return kpis;
