@@ -597,18 +597,23 @@ const handleUpload = async (req, res) => {
     let allowedEvents = [];
 
     if (configRows.length && configRows[0].events) {
-      try {
-        allowedEvents = JSON.parse(configRows[0].events);
-      } catch (e) {
-        allowedEvents = configRows[0].events
-          .split(",")
-          .map((e) => e.trim().toLowerCase());
+      const rawEvents = configRows[0].events;
+
+      if (Array.isArray(rawEvents)) {
+        // JSON column already parsed by mysql2
+        allowedEvents = rawEvents;
+      } else if (typeof rawEvents === "string") {
+        try {
+          allowedEvents = JSON.parse(rawEvents);
+        } catch (e) {
+          allowedEvents = rawEvents.split(",");
+        }
       }
     }
 
-    allowedEvents = allowedEvents.map((e) => e.toLowerCase());
+    allowedEvents = allowedEvents.map((e) => String(e).trim().toLowerCase());
 
-    console.log("✅ Allowed Events:", allowedEvents);
+    console.log("✅ Allowed Events Final:", allowedEvents);
     // ---------------------------
     // Process uploaded files
     // ---------------------------
