@@ -47,11 +47,11 @@ function computeKPIs(agg, eventKeys) {
     const noeVal = int(eData.noe); // E1 / E2
     const peVal = int(eData.pe); // PAE1 / PAE2
 
-    const total = noeVal + peVal;
+    // use ONLY NOE count
+    kpis[`${eKey}_count`] = noeVal;
 
-    // existing logic (KEEP)
-    kpis[`${eKey}_count`] = total;
-    kpis[`cr_${eKey}`] = pct(total, installs);
+    // CR should also use only NOE
+    kpis[`cr_${eKey}`] = pct(noeVal, installs);
 
     // change this formula
     kpis[`pa_${eKey}`] = pct(peVal, noeVal);

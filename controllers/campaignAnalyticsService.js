@@ -481,9 +481,9 @@ function flattenRow({
     const paPercent = getValue(data.pa_install);
     const fraudPercent = getValue(data.install_fraud);
 
-    const rtiCount = Math.round((rtiPercent * installs) / 100);
-    const paCount = Math.round((paPercent * installs) / 100);
-    const fraudCount = Math.round((fraudPercent * installs) / 100);
+    const rtiCount = getValue(data.rti);
+    const paCount = getValue(data.pi);
+    const fraudCount = rtiCount + paCount;
 
     row[`rt_install_${suffix}`] = `${rtiCount} (${rtiPercent}%)`;
 
