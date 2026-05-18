@@ -74,7 +74,8 @@ function applyColors(kpis, rule1, rule2, eventKeys) {
   // raw counts (no color)
   result.clicks = kpis.clicks;
   result.installs = kpis.installs;
-
+  result.rti = kpis.rti;
+  result.pi = kpis.pi;
   // Dynamic event KPIs
   eventKeys.forEach((eKey, idx) => {
     const ruleKeyIdx = idx + 1;
