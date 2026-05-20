@@ -597,23 +597,44 @@ const handleUpload = async (req, res) => {
     let allowedEvents = [];
 
     if (configRows.length && configRows[0].events) {
-      const rawEvents = configRows[0].events;
+      let rawEvents = configRows[0].events;
 
+      // Handle Buffer
+      if (Buffer.isBuffer(rawEvents)) {
+        rawEvents = rawEvents.toString("utf8");
+      }
+
+      // Already array
       if (Array.isArray(rawEvents)) {
-        // JSON column already parsed by mysql2
         allowedEvents = rawEvents;
-      } else if (typeof rawEvents === "string") {
+      }
+
+      // Stringified JSON
+      else if (typeof rawEvents === "string") {
         try {
-          allowedEvents = JSON.parse(rawEvents);
+          const parsed = JSON.parse(rawEvents);
+
+          if (Array.isArray(parsed)) {
+            allowedEvents = parsed;
+          } else {
+            allowedEvents = rawEvents.split(",");
+          }
         } catch (e) {
           allowedEvents = rawEvents.split(",");
         }
       }
     }
 
-    allowedEvents = allowedEvents.map((e) => String(e).trim().toLowerCase());
+    allowedEvents = allowedEvents
+      .map((e) =>
+        String(e)
+          .trim()
+          .replace(/^"+|"+$/g, "") // remove accidental quotes
+          .toLowerCase(),
+      )
+      .filter(Boolean);
 
-    console.log("✅ Allowed Events Final:", allowedEvents);
+    console.log("✅ Allowed Events:", allowedEvents);
     // ---------------------------
     // Process uploaded files
     // ---------------------------
@@ -1004,9 +1025,9 @@ const handleUpload = async (req, res) => {
     // 🔥 Build mapping: (pid + date) → campaign_metrics_id
     const [cmRows] = await pool.query(
       `
-  SELECT id, pid, metrics_date 
-  FROM campaign_metrics_new 
-  WHERE campaign_name = ?
+SELECT id, campaign_name, pid, metrics_date
+FROM campaign_metrics_new
+WHERE campaign_name = ?
 `,
       [fullCampaignName],
     );
@@ -1014,7 +1035,7 @@ const handleUpload = async (req, res) => {
     const cmMap = new Map();
 
     for (const row of cmRows) {
-      const key = `${row.pid}_${row.metrics_date}`;
+      const key = `${row.campaign_name}_${String(row.pid).trim().toLowerCase()}_${row.metrics_date}`;
       cmMap.set(key, row.id);
     }
     const eventData = [];
@@ -1030,7 +1051,7 @@ const handleUpload = async (req, res) => {
         for (const [compoundKey, count] of eventMap.entries()) {
           const [eventType, eventName] = compoundKey.split("__");
 
-          const key = `${d.pid}_${date}`;
+          const key = `${fullCampaignName}_${String(d.pid).trim().toLowerCase()}_${date}`;
 
           const campaignMetricsId = cmMap.get(key) || null;
 
