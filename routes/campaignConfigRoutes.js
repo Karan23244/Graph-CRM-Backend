@@ -5,7 +5,7 @@ const campaignController = require("../controllers/campaignconfigController");
 
 router.get("/campaigns_list", campaignController.getCampaignList);
 router.post("/campaign-config", campaignController.createCampaignConfig);
-router.get("/campaign-config/:id", campaignController.getCampaignConfig);
+router.post("/campaign-config/find", campaignController.getCampaignConfig);
 router.put("/campaign-config/:id", campaignController.updateCampaignConfig);
 router.get(
   "/configured-campaigns",

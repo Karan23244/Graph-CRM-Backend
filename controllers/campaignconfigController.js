@@ -116,28 +116,94 @@ exports.createCampaignConfig = async (req, res) => {
 // GET /campaign-config/:id
 // Fetch existing config by campaign_id
 // ─────────────────────────────────────────────────────────────────────────────
+// exports.getCampaignConfig = async (req, res) => {
+//   const { id } = req.params;
+
+//   console.log("Fetching config for campaign ID:", id);
+
+//   try {
+//     const [rows] = await db.query(`SELECT * FROM campaign_configs`);
+
+//     console.log(`Total configs in DB: ${rows.length}`);
+
+//     const config = rows.find((row) => {
+//       let parsed;
+
+//       try {
+//         parsed = JSON.parse(row.campaign_id || "[]");
+//       } catch {
+//         parsed = row.campaign_id;
+//       }
+
+//       const ids = Array.isArray(parsed) ? parsed : [parsed];
+
+//       return ids.map(String).includes(String(id));
+//     });
+
+//     if (!config) {
+//       return res.status(404).json({
+//         message: "Config not found",
+//       });
+//     }
+
+//     console.log("Config found:", config);
+
+//     return res.json({
+//       ...config,
+
+//       campaign_ids: (() => {
+//         try {
+//           return JSON.parse(config.campaign_id || "[]");
+//         } catch {
+//           return [config.campaign_id];
+//         }
+//       })(),
+
+//       campaign_names: (() => {
+//         try {
+//           return JSON.parse(config.campaign_name || "[]");
+//         } catch {
+//           return [config.campaign_name];
+//         }
+//       })(),
+
+//       events: JSON.parse(config.events || "[]"),
+
+//       rule1_params: JSON.parse(config.rule1_params || "{}"),
+
+//       rule2_params: JSON.parse(config.rule2_params || "{}"),
+
+//       ignore_metrics: JSON.parse(config.ignore_metrics || "[]"),
+//     });
+//   } catch (err) {
+//     console.error("getCampaignConfig error:", err);
+
+//     return res.status(500).json({
+//       message: "Failed to fetch config",
+//     });
+//   }
+// };
+// POST /campaign-config/find
 exports.getCampaignConfig = async (req, res) => {
-  const { id } = req.params;
-
-  console.log("Fetching config for campaign ID:", id);
-
+  const { campaign_ids } = req.body;
+  console.log("Fetching config for campaign IDs:", campaign_ids);
   try {
     const [rows] = await db.query(`SELECT * FROM campaign_configs`);
 
-    console.log(`Total configs in DB: ${rows.length}`);
-
     const config = rows.find((row) => {
-      let parsed;
+      let parsed = [];
 
       try {
         parsed = JSON.parse(row.campaign_id || "[]");
       } catch {
-        parsed = row.campaign_id;
+        parsed = [];
       }
 
-      const ids = Array.isArray(parsed) ? parsed : [parsed];
+      const dbIds = parsed.map(String).sort();
 
-      return ids.map(String).includes(String(id));
+      const incomingIds = campaign_ids.map(String).sort();
+
+      return incomingIds.every((id) => dbIds.includes(id));
     });
 
     if (!config) {
@@ -146,26 +212,12 @@ exports.getCampaignConfig = async (req, res) => {
       });
     }
 
-    console.log("Config found:", config);
-
     return res.json({
       ...config,
 
-      campaign_ids: (() => {
-        try {
-          return JSON.parse(config.campaign_id || "[]");
-        } catch {
-          return [config.campaign_id];
-        }
-      })(),
+      campaign_ids: JSON.parse(config.campaign_id || "[]"),
 
-      campaign_names: (() => {
-        try {
-          return JSON.parse(config.campaign_name || "[]");
-        } catch {
-          return [config.campaign_name];
-        }
-      })(),
+      campaign_names: JSON.parse(config.campaign_name || "[]"),
 
       events: JSON.parse(config.events || "[]"),
 
@@ -183,7 +235,6 @@ exports.getCampaignConfig = async (req, res) => {
     });
   }
 };
-
 // ─────────────────────────────────────────────────────────────────────────────
 // PUT /campaign-config/:id
 // Update existing config by row id (primary key)

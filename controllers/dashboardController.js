@@ -180,15 +180,6 @@ exports.getAdvertiserDashboardData = async (req, res) => {
     const { user_id, username, role, startDate, endDate, assign_subadmin } =
       req.body;
 
-    console.log("Advertiser Dashboard Request:", {
-      user_id,
-      username,
-      role,
-      startDate,
-      endDate,
-      assign_subadmin,
-    });
-
     let query = `
       SELECT
         ad.*,
@@ -289,12 +280,7 @@ exports.getAdvertiserDashboardData = async (req, res) => {
 
     query += ` ORDER BY ad.created_at DESC`;
 
-    console.log("FINAL QUERY:", query);
-    console.log("PARAMS:", params);
-
     const [rows] = await pool.execute(query, params);
-
-    console.log(`Fetched ${rows.length} rows for advertiser dashboard`);
 
     res.json({
       success: true,

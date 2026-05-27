@@ -15,6 +15,7 @@ const campaignConfigRoutes = require("./routes/campaignConfigRoutes");
 const reportRoutes = require("./routes/reportRoutes");
 const campaignAnalyticsRoutes = require("./routes/campaignAnalyticsRoutes");
 const decisionEngineRoutes = require("./routes/decisionEngineRoutes");
+const analyticsRoutes = require("./routes/analyticsRoutes");
 // const campaignRoutes = require("./routes/campaignRoutes");
 const router = express.Router();
 const http = require("http");
@@ -68,7 +69,7 @@ app.use("/api", campaignConfigRoutes);
 app.use("/api", reportRoutes);
 app.use("/api", campaignAnalyticsRoutes);
 app.use("/api", decisionEngineRoutes);
-
+app.use("/analytics", analyticsRoutes); 
 // Helper: fetch campaign conditions; if not present, fall back to __DEFAULT__
 app.get("/api/zone-conditions/:campaign", async (req, res) => {
   const campaign = req.params.campaign;
