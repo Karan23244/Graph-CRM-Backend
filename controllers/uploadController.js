@@ -519,6 +519,7 @@ const handleUpload = async (req, res) => {
       prev30Str,
       startDate,
       os,
+      campaignIds,
     );
     // ✅ Step 3: Create a map of all advData by PID
     const advPidMap = new Map();
@@ -1093,7 +1094,7 @@ SELECT id, campaign_name, pid, metrics_date, os
 FROM campaign_metrics_new
 WHERE campaign_name = ? AND os = ?
 `,
-      [fullCampaignName],
+      [fullCampaignName, os],
     );
 
     const cmMap = new Map();
