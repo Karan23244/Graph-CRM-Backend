@@ -89,22 +89,21 @@ exports.getUniqueCampaigns = async (req, res) => {
       const placeholders = allowedUsers.map(() => "?").join(",");
 
       query = `
-        SELECT 
-          cmn.campaign_name,
-          cmn.os,
-          cmn.geo,
-          GROUP_CONCAT(DISTINCT cmn.campaign_id) AS campaign_ids
-        FROM campaign_metrics_new cmn
-        INNER JOIN campaign_data cd
-          ON cmn.campaign_id = cd.id
-        WHERE cd.user_id IN (${placeholders})
-          AND cmn.campaign_name IS NOT NULL
-          AND cmn.campaign_name != ''
-        GROUP BY 
-          cmn.campaign_name,
-          cmn.os,
-          cmn.geo
-        ORDER BY cmn.campaign_name ASC;
+      SELECT
+      cmn.campaign_name,
+      cmn.os,
+      GROUP_CONCAT(DISTINCT cmn.geo SEPARATOR '|||') AS geos,
+      GROUP_CONCAT(DISTINCT cmn.campaign_id) AS campaign_ids
+    FROM campaign_metrics_new cmn
+    INNER JOIN campaign_data cd
+      ON cmn.campaign_id = cd.id
+    WHERE cd.user_id IN (${placeholders})
+      AND cmn.campaign_name IS NOT NULL
+      AND cmn.campaign_name != ''
+    GROUP BY
+      cmn.campaign_name,
+      cmn.os
+    ORDER BY cmn.campaign_name ASC;
       `;
 
       params = allowedUsers;
@@ -115,19 +114,18 @@ exports.getUniqueCampaigns = async (req, res) => {
     // ==============================
     else {
       query = `
-        SELECT 
-          campaign_name,
-          os,
-          geo,
-          GROUP_CONCAT(DISTINCT campaign_id) AS campaign_ids
-        FROM campaign_metrics_new
-        WHERE campaign_name IS NOT NULL
-          AND campaign_name != ''
-        GROUP BY 
-          campaign_name,
-          os,
-          geo
-        ORDER BY campaign_name ASC;
+    SELECT
+      campaign_name,
+      os,
+      GROUP_CONCAT(DISTINCT geo SEPARATOR '|||') AS geos,
+      GROUP_CONCAT(DISTINCT campaign_id) AS campaign_ids
+    FROM campaign_metrics_new
+    WHERE campaign_name IS NOT NULL
+      AND campaign_name != ''
+    GROUP BY
+      campaign_name,
+      os
+    ORDER BY campaign_name ASC;
       `;
     }
 
@@ -135,8 +133,11 @@ exports.getUniqueCampaigns = async (req, res) => {
 
     const formattedData = rows.map((row) => ({
       campaign_name: row.campaign_name,
+
       os: row.os,
-      geo: row.geo,
+
+      geo: row.geos ? row.geos.split("|||").filter(Boolean) : [],
+
       campaign_ids: row.campaign_ids
         ? row.campaign_ids.split(",").map((id) => Number(id))
         : [],
@@ -158,8 +159,22 @@ exports.getUniqueCampaigns = async (req, res) => {
   }
 };
 exports.deleteCampaignData = async (req, res) => {
-  const { campaign_name, campaign_ids = [], geo = [], os } = req.body;
-
+  const {
+    campaign_name,
+    campaign_ids = [],
+    geo = [],
+    os,
+    start_date,
+    end_date,
+  } = req.body;
+  console.log("Delete Campaign Data Request:", {
+    campaign_name,
+    campaign_ids,
+    geo,
+    os,
+    start_date,
+    end_date,
+  });
   const connection = await db.getConnection();
 
   try {
@@ -167,9 +182,21 @@ exports.deleteCampaignData = async (req, res) => {
 
     const campaignPlaceholders = campaign_ids.map(() => "?").join(",");
 
-    const geoCondition = geo
-      .map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`)
-      .join(" OR ");
+    const geoCondition =
+      geo.length > 0
+        ? geo.map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`).join(" OR ")
+        : "1=0";
+
+    const queryParams = [
+      campaign_name,
+      os,
+
+      start_date,
+      end_date,
+
+      ...campaign_ids,
+      ...geo,
+    ];
 
     const [metricRows] = await connection.execute(
       `
@@ -177,15 +204,18 @@ exports.deleteCampaignData = async (req, res) => {
       FROM campaign_metrics_new cm
       WHERE LOWER(cm.campaign_name) = LOWER(?)
         AND LOWER(cm.os) = LOWER(?)
+
+        AND DATE(cm.metrics_date) BETWEEN DATE(?) AND DATE(?)
+
         AND (
-          cm.campaign_id IN (${campaignPlaceholders})
+          cm.campaign_id IN (${campaignPlaceholders || "NULL"})
           OR (
             (cm.campaign_id IS NULL OR cm.campaign_id = '')
             AND (${geoCondition})
           )
         )
       `,
-      [campaign_name, os, ...campaign_ids, ...geo],
+      queryParams,
     );
 
     if (!metricRows.length) {
@@ -193,7 +223,7 @@ exports.deleteCampaignData = async (req, res) => {
 
       return res.status(404).json({
         success: false,
-        message: "No matching data found",
+        message: "No matching data found for selected date range",
       });
     }
 
@@ -201,6 +231,7 @@ exports.deleteCampaignData = async (req, res) => {
 
     const idPlaceholders = metricIds.map(() => "?").join(",");
 
+    // delete events first
     const [eventResult] = await connection.execute(
       `
       DELETE FROM campaign_event_metrics_new
@@ -209,6 +240,7 @@ exports.deleteCampaignData = async (req, res) => {
       metricIds,
     );
 
+    // delete metrics
     const [metricResult] = await connection.execute(
       `
       DELETE FROM campaign_metrics_new
@@ -224,6 +256,8 @@ exports.deleteCampaignData = async (req, res) => {
       message: "Campaign data deleted successfully",
       deleted_events: eventResult.affectedRows,
       deleted_metrics: metricResult.affectedRows,
+      start_date,
+      end_date,
     });
   } catch (error) {
     await connection.rollback();
