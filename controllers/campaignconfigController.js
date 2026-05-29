@@ -317,32 +317,30 @@ exports.getConfiguredCampaigns = async (req, res) => {
 
         return Array.isArray(parsed) ? parsed : [parsed];
       } catch {
-        // old non-json rows
         return value ? [value] : [];
       }
     };
 
-    const formatted = rows.map((row) => {
+    const formatted = rows.flatMap((row) => {
       const campaignIds = safeParseArray(row.campaign_id);
 
-      const campaignNames = safeParseArray(row.campaign_name);
+      const campaignNames = [...new Set(safeParseArray(row.campaign_name))];
 
-      return {
-        id: row.id,
+      return campaignNames.map((campaignName) => ({
+        config_id: row.id,
+
+        campaign_name: campaignName,
 
         campaign_ids: campaignIds,
 
-        campaign_names: campaignNames,
+        total_campaign_ids: campaignIds.length,
 
         os: row.os,
 
-        display_name: campaignNames[0] || "Unknown Campaign",
-
-        total_campaigns: campaignIds.length,
-
         created_at: row.created_at,
+
         updated_at: row.updated_at,
-      };
+      }));
     });
 
     return res.json({
@@ -359,3 +357,5 @@ exports.getConfiguredCampaigns = async (req, res) => {
     });
   }
 };
+
+

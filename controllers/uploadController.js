@@ -403,24 +403,25 @@ function extractDate(row, headers, metricName) {
 // 1. UPDATE getAdvDataFromDB()
 // ==============================
 
-async function getAdvDataFromDB(campaignName, startDate, endDate, os) {
-  const [rows] = await pool.query(
-    `SELECT 
-        pid,
-        pub_id,
-        pub_name,
-        campaign_name,
-        paused_date,
-        flag,
-        os,
-        campaign_id,      -- ✅ NEW
-        shared_date       -- ✅ NEW
-     FROM adv_data
-     WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(13), '') =
-           REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
-       AND DATE(shared_date) BETWEEN ? AND ?
-       AND os = ?;`,
-    [campaignName, startDate, endDate, os],
+async function getAdvDataFromDB(campaignName, startDate, endDate, os,campaignIds,) {
+ const [rows] = await pool.query(
+  `SELECT 
+      pid,
+      pub_id,
+      pub_name,
+      campaign_name,
+      paused_date,
+      flag,
+      os,
+      campaign_id,
+      shared_date
+   FROM adv_data
+   WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(13), '') =
+         REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
+     AND campaign_id IN (?)
+     AND DATE(shared_date) BETWEEN ? AND ?
+     AND os = ?`,
+  [campaignName, campaignIds, startDate, endDate, os],
   );
 
   const pidMap = new Map();
@@ -461,6 +462,7 @@ async function getAdvDataFromDB(campaignName, startDate, endDate, os) {
 const handleUpload = async (req, res) => {
   try {
     const { campaignName, os, geo, dateRange, socketId } = req.body;
+    const campaignIds = JSON.parse(req.body.campaign_ids || "[]");
     console.log(socketId);
     const fullCampaignName = campaignName;
     const baseCampaignName = campaignName.split(",")[0];
@@ -497,6 +499,7 @@ const handleUpload = async (req, res) => {
       startDate,
       endDate,
       os,
+      campaignIds,
     );
     // ✅ Step 2: Fetch adv_data from 30 days before startDate
     const prev30Start = new Date(startDate);
@@ -690,7 +693,7 @@ const handleUpload = async (req, res) => {
             s
               .toString()
               .toLowerCase()
-              .replace(/[\s\-_]/g, ""); // remove spaces, dashes, underscores
+              .replace(/[\s\-]/g, ""); // remove spaces, dashes, underscores
           const headers = Object.keys(row);
           const normHeaders = headers.map((h) => normalizeHeader(h));
 
@@ -726,30 +729,85 @@ const handleUpload = async (req, res) => {
           // ---- Fallback NOE: SUM all columns starting with
           // "uniqueusersltvdayscumulativeappsflyer"
           // ----
+          // if (!uploadedMetricNames.has("noe")) {
+          //   let noeSum = 0;
+
+          //   normHeaders.forEach((normHeader, idx) => {
+          //     if (
+          //       normHeader.startsWith("uniqueusersltvdayscumulativeappsflyer")
+          //     ) {
+          //       const originalKey = headers[idx];
+          //       const val =
+          //         Number(
+          //           (row[originalKey] || "").toString().replace(/,/g, ""),
+          //         ) || 0;
+          //       noeSum += val;
+          //     }
+          //   });
+
+          //   if (noeSum > 0) {
+          //     incIfPidDate(metricCounts.noe, pid, metricsDate, noeSum);
+          //     console.log(
+          //       `📊 [Fallback NOE SUM] PID=${pid}, date=${metricsDate}, noe=${noeSum}`,
+          //     );
+          //   }
+          // }
+          // ---- Fallback NOE from Clicks File Dynamic Event Columns ----
           if (!uploadedMetricNames.has("noe")) {
-            let noeSum = 0;
+            const PREFIX = "uniqueusersltvdayscumulativeappsflyer";
+
+            let totalNoe = 0;
 
             normHeaders.forEach((normHeader, idx) => {
-              if (
-                normHeader.startsWith("uniqueusersltvdayscumulativeappsflyer")
-              ) {
+              // Match columns starting with:
+              // uniqueusersltvdayscumulativeappsflyer
+              if (normHeader.startsWith(PREFIX)) {
                 const originalKey = headers[idx];
+
+                // Extract event name after prefix
+                let extractedEvent = normHeader.replace(PREFIX, "");
+
+                extractedEvent = extractedEvent
+                  .replace(/^[_\-\s]+/, "")
+                  .trim()
+                  .toLowerCase();
+
+                // skip if no event name
+                if (!extractedEvent) return;
+
+                // Match only allowed campaign config events
+                if (!allowedEvents.includes(extractedEvent)) {
+                  return;
+                }
+
                 const val =
                   Number(
                     (row[originalKey] || "").toString().replace(/,/g, ""),
                   ) || 0;
-                noeSum += val;
+
+                if (val <= 0) return;
+
+                // Total NOE
+                totalNoe += val;
+
+                // Store event-wise NOE
+                incEventCount(pid, metricsDate, extractedEvent, "noe", val);
+
+                console.log(
+                  `📊 [Fallback Clicks Event] PID=${pid}, date=${metricsDate}, event=${extractedEvent}, val=${val}`,
+                );
               }
             });
 
-            if (noeSum > 0) {
-              incIfPidDate(metricCounts.noe, pid, metricsDate, noeSum);
+            // store overall NOE metric
+            if (totalNoe > 0) {
+              incIfPidDate(metricCounts.noe, pid, metricsDate, totalNoe);
+
               console.log(
-                `📊 [Fallback NOE SUM] PID=${pid}, date=${metricsDate}, noe=${noeSum}`,
+                `📊 [Fallback NOE TOTAL] PID=${pid}, date=${metricsDate}, total=${totalNoe}`,
               );
             }
           }
-
           return;
         }
 

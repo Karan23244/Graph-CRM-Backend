@@ -45,11 +45,19 @@ const {
  *
  * @param {object} params
  * @param {string} params.campaign_name  e.g. "Moneyview"
- * @param {string} params.os             e.g. "Android"
- * @param {string} params.date           "YYYY-MM-DD"  <- reference date from payload
+ * @param {number[]} params.campaign_ids
+ * @param {string[]} params.geo
+ * @param {string} params.os
+ * @param {string} params.date
  * @returns {Promise<object[]>}          Array of per-group decision results
  */
-async function runDecisionEngine({ campaign_name, os, date }) {
+async function runDecisionEngine({
+  campaign_name,
+  campaign_ids = [],
+  geo = [],
+  os,
+  date,
+}) {
   // ── STEP A: Fetch campaign config ──────────────────────────────────────────
   // QUERIES.GET_CONFIG is the SQL string from decisionEngine.queries.js
   // db.query returns [rows, fields] — we destructure to get rows only
@@ -60,7 +68,10 @@ async function runDecisionEngine({ campaign_name, os, date }) {
   //   FROM campaign_configs
   //   WHERE JSON_CONTAINS(campaign_name, JSON_QUOTE(?)) AND os = ?
   //
-  const [configRows] = await db.query(QUERIES.GET_CONFIG, [campaign_name, os]);
+  const [configRows] = await db.query(QUERIES.GET_CONFIG(), [
+    campaign_name,
+    os,
+  ]);
 
   if (!configRows.length) {
     throw new Error(
@@ -68,7 +79,21 @@ async function runDecisionEngine({ campaign_name, os, date }) {
     );
   }
 
-  const config = configRows[0];
+  const config = configRows.find((row) => {
+    try {
+      const configCampaignIds = JSON.parse(row.campaign_id || "[]");
+
+      return campaign_ids.some((id) => configCampaignIds.includes(Number(id)));
+    } catch {
+      return false;
+    }
+  });
+
+  if (!config) {
+    throw new Error(
+      `No matching config found for campaign="${campaign_name}", os="${os}"`,
+    );
+  }
 
   // Parse all JSON columns safely
   const rule1Params = safeParseJSON(config.rule1_params, {});
@@ -107,27 +132,44 @@ async function runDecisionEngine({ campaign_name, os, date }) {
   //                          ^ e2_total   ^ pe_e2_total
   //
   const [[clickRows], [installRows], [eventRows]] = await Promise.all([
-    db.query(QUERIES.GET_CLICK_METRICS, [
+    db.query(QUERIES.GET_CLICK_METRICS(campaign_ids, geo), [
       date,
       date,
+
       campaign_name,
       os,
+
+      ...campaign_ids,
+      ...geo,
+
       date,
       date,
     ]),
-    db.query(QUERIES.GET_INSTALL_METRICS, [
+
+    db.query(QUERIES.GET_INSTALL_METRICS(campaign_ids, geo), [
       date,
       date,
+
       campaign_name,
       os,
+
+      ...campaign_ids,
+      ...geo,
+
       date,
       date,
     ]),
-    db.query(QUERIES.GET_EVENT_METRICS, [
+
+    db.query(QUERIES.GET_EVENT_METRICS(campaign_ids, geo), [
       e2EventName,
       e2EventName,
+
       campaign_name,
       os,
+
+      ...campaign_ids,
+      ...geo,
+
       date,
       date,
     ]),

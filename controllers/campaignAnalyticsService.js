@@ -59,60 +59,184 @@ function buildEventMap(eventsArr) {
 // 3. Fetch aggregated campaign_metrics for all windows in ONE query
 //    Uses CASE WHEN to pivot MTD / 7D / 3D in a single pass
 // ─────────────────────────────────────────────
-async function fetchMetricsAllWindows(campaignName, os, windows) {
+// async function fetchMetricsAllWindows(campaignName, os, windows) {
+//   const { mtd, primary, secondary } = windows;
+
+//   /*
+//    * Date filter uses COALESCE(install_time, event_time, clicks_date)
+//    * We cast it to DATE for comparison.
+//    */
+//   const sql = `
+//     SELECT
+//       cm.pubam,
+//       cm.pubid,
+//       cm.pid,
+//       MAX(cm.is_paused) AS is_paused,
+
+//       /* MTD aggregates */
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS mtd_clicks,
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS mtd_installs,
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS mtd_rti,
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS mtd_pi,
+
+//       /* Primary window (7D) */
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS primary_clicks,
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS primary_installs,
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS primary_rti,
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS primary_pi,
+
+//       /* Secondary window (3D) */
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS secondary_clicks,
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS secondary_installs,
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS secondary_rti,
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS secondary_pi
+
+//     FROM campaign_metrics_new cm
+//     WHERE LOWER(cm.campaign_name) = LOWER(?)
+//       AND LOWER(cm.os) = LOWER(?)
+//       AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date)) BETWEEN ? AND ?
+
+// GROUP BY cm.pubam, cm.pubid, cm.pid, cm.os  `;
+
+//   const params = [
+//     // MTD (×4 columns)
+//     mtd.start,
+//     mtd.end,
+//     mtd.start,
+//     mtd.end,
+//     mtd.start,
+//     mtd.end,
+//     mtd.start,
+//     mtd.end,
+//     // Primary (×4)
+//     primary.start,
+//     primary.end,
+//     primary.start,
+//     primary.end,
+//     primary.start,
+//     primary.end,
+//     primary.start,
+//     primary.end,
+//     // Secondary (×4)
+//     secondary.start,
+//     secondary.end,
+//     secondary.start,
+//     secondary.end,
+//     secondary.start,
+//     secondary.end,
+//     secondary.start,
+//     secondary.end,
+//     // WHERE clause
+//     campaignName,
+//     os,
+//     mtd.start,
+//     mtd.end, // outer range = MTD (widest window)
+//   ];
+
+//   const [rows] = await db.execute(sql, params);
+//   return rows;
+// }
+async function fetchMetricsAllWindows(
+  campaignName,
+  os,
+  geo,
+  campaign_ids,
+  windows,
+) {
   const { mtd, primary, secondary } = windows;
 
-  /*
-   * Date filter uses COALESCE(install_time, event_time, clicks_date)
-   * We cast it to DATE for comparison.
-   */
+  const campaignPlaceholders = campaign_ids.map(() => "?").join(",");
+  const geoPlaceholders = geo.map(() => "?").join(",");
+
   const sql = `
     SELECT
+     cm.campaign_id,
       cm.pubam,
       cm.pubid,
       cm.pid,
       MAX(cm.is_paused) AS is_paused,
 
-      /* MTD aggregates */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS mtd_clicks,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS mtd_installs,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS mtd_rti,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS mtd_pi,
+      /* MTD */
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.clicks ELSE 0 END) AS mtd_clicks,
 
-      /* Primary window (7D) */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS primary_clicks,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS primary_installs,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS primary_rti,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS primary_pi,
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS mtd_installs,
 
-      /* Secondary window (3D) */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS secondary_clicks,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS secondary_installs,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS secondary_rti,
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS secondary_pi
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.rti ELSE 0 END) AS mtd_rti,
+
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.pi ELSE 0 END) AS mtd_pi,
+
+      /* PRIMARY */
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.clicks ELSE 0 END) AS primary_clicks,
+
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS primary_installs,
+
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.rti ELSE 0 END) AS primary_rti,
+
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.pi ELSE 0 END) AS primary_pi,
+
+      /* SECONDARY */
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.clicks ELSE 0 END) AS secondary_clicks,
+
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS secondary_installs,
+
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.rti ELSE 0 END) AS secondary_rti,
+
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cm.pi ELSE 0 END) AS secondary_pi
 
     FROM campaign_metrics_new cm
+
     WHERE LOWER(cm.campaign_name) = LOWER(?)
       AND LOWER(cm.os) = LOWER(?)
-      AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date)) BETWEEN ? AND ?
+   AND (
+  cm.campaign_id IN (${campaignPlaceholders})
 
-    GROUP BY cm.pubam, cm.pubid, cm.pid
+  OR (
+
+    (cm.campaign_id IS NULL OR cm.campaign_id = '')
+
+    AND (
+      ${geo.map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`).join(" OR ")}
+    )
+
+  )
+)
+
+      AND DATE(COALESCE(
+        cm.install_time,
+        cm.event_time,
+        cm.clicks_date,
+        cm.metrics_date
+      )) BETWEEN ? AND ?
+
+    GROUP BY cm.pubam, cm.pubid, cm.pid, cm.os, cm.campaign_id
   `;
 
   const params = [
-    // MTD (×4 columns)
+    // MTD
     mtd.start,
     mtd.end,
     mtd.start,
@@ -121,7 +245,8 @@ async function fetchMetricsAllWindows(campaignName, os, windows) {
     mtd.end,
     mtd.start,
     mtd.end,
-    // Primary (×4)
+
+    // PRIMARY
     primary.start,
     primary.end,
     primary.start,
@@ -130,7 +255,8 @@ async function fetchMetricsAllWindows(campaignName, os, windows) {
     primary.end,
     primary.start,
     primary.end,
-    // Secondary (×4)
+
+    // SECONDARY
     secondary.start,
     secondary.end,
     secondary.start,
@@ -139,24 +265,118 @@ async function fetchMetricsAllWindows(campaignName, os, windows) {
     secondary.end,
     secondary.start,
     secondary.end,
-    // WHERE clause
+
+    // WHERE
     campaignName,
     os,
+
+    ...campaign_ids,
+    ...geo,
+
     mtd.start,
-    mtd.end, // outer range = MTD (widest window)
+    mtd.end,
   ];
 
   const [rows] = await db.execute(sql, params);
+
   return rows;
 }
-
 // ─────────────────────────────────────────────
 // 4. Fetch event metrics for all PIDs in ONE query
 //    Returns map: { pid → { windowLabel → { eventName → { noe, pe } } } }
 // ─────────────────────────────────────────────
+// async function fetchEventMetricsAllWindows(
+//   campaignName,
+//   os,
+//   windows,
+//   eventNames,
+// ) {
+//   if (!eventNames.length) return {};
+
+//   const { mtd, primary, secondary } = windows;
+
+//   // Build placeholders for event names
+//   const evPlaceholders = eventNames.map(() => "?").join(",");
+
+//   const sql = `
+//     SELECT
+//       cm.pid,
+//       cem.event_name,
+//       cem.event_type,
+
+//       /* MTD */
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS mtd_count,
+
+//       /* Primary */
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS primary_count,
+
+//       /* Secondary */
+//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
+//                     BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS secondary_count
+
+//     FROM campaign_event_metrics_new cem
+//     INNER JOIN campaign_metrics_new cm ON cm.id = cem.campaign_metrics_id
+// WHERE LOWER(cm.campaign_name) = LOWER(?)
+//   AND LOWER(cm.os) = LOWER(?)
+//   AND cem.event_name IN (${evPlaceholders})
+//   AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date)) BETWEEN ? AND ?
+
+//    GROUP BY cm.pid, cm.os, cem.event_name, cem.event_type
+//   `;
+
+//   const params = [
+//     mtd.start,
+//     mtd.end,
+//     primary.start,
+//     primary.end,
+//     secondary.start,
+//     secondary.end,
+//     campaignName,
+//     os,
+//     ...eventNames,
+//     mtd.start,
+//     mtd.end,
+//   ];
+
+//   const [rows] = await db.execute(sql, params);
+
+//   /*
+//    * Build nested map:
+//    * {
+//    *   "PID123": {
+//    *     "submit_success": { mtd_noe: 0, mtd_pe: 400, primary_noe: 0, ... },
+//    *     ...
+//    *   }
+//    * }
+//    */
+//   const map = {};
+//   for (const row of rows) {
+//     const pidKey = `${row.pid}_${os}`;
+//     const pid = row.pid;
+//     const ev = row.event_name;
+//     const type = row.event_type; // 'noe' or 'pe'
+
+//     if (!map[pidKey]) map[pidKey] = {};
+//     if (!map[pidKey][ev]) map[pidKey][ev] = {};
+
+//     for (const win of ["mtd", "primary", "secondary"]) {
+//       if (!map[pidKey][ev][win]) map[pidKey][ev][win] = { noe: 0, pe: 0 };
+//       if (type === "noe")
+//         map[pidKey][ev][win].noe += parseInt(row[`${win}_count`]) || 0;
+//       if (type === "pe")
+//         map[pidKey][ev][win].pe += parseInt(row[`${win}_count`]) || 0;
+//     }
+//   }
+
+//   return map;
+// }
 async function fetchEventMetricsAllWindows(
   campaignName,
   os,
+  geo,
+  campaign_ids,
   windows,
   eventNames,
 ) {
@@ -164,35 +384,57 @@ async function fetchEventMetricsAllWindows(
 
   const { mtd, primary, secondary } = windows;
 
-  // Build placeholders for event names
   const evPlaceholders = eventNames.map(() => "?").join(",");
+  const campaignPlaceholders = campaign_ids.map(() => "?").join(",");
+  const geoPlaceholders = geo.map(() => "?").join(",");
 
   const sql = `
     SELECT
+     cm.campaign_id,
       cm.pid,
       cem.event_name,
       cem.event_type,
 
-      /* MTD */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS mtd_count,
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS mtd_count,
 
-      /* Primary */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS primary_count,
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS primary_count,
 
-      /* Secondary */
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-                    BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS secondary_count
+      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+          BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS secondary_count
 
     FROM campaign_event_metrics_new cem
-    INNER JOIN campaign_metrics_new cm ON cm.id = cem.campaign_metrics_id
-WHERE LOWER(cm.campaign_name) = LOWER(?)
-  AND LOWER(cm.os) = LOWER(?)
-  AND cem.event_name IN (${evPlaceholders})
-  AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date)) BETWEEN ? AND ?
+    INNER JOIN campaign_metrics_new cm
+      ON cm.id = cem.campaign_metrics_id
 
-    GROUP BY cm.pid, cem.event_name, cem.event_type
+    WHERE LOWER(cm.campaign_name) = LOWER(?)
+      AND LOWER(cm.os) = LOWER(?)
+
+  AND (
+  cm.campaign_id IN (${campaignPlaceholders})
+
+  OR (
+
+    (cm.campaign_id IS NULL OR cm.campaign_id = '')
+
+    AND (
+      ${geo.map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`).join(" OR ")}
+    )
+
+  )
+)
+
+      AND cem.event_name IN (${evPlaceholders})
+
+      AND DATE(COALESCE(
+        cm.install_time,
+        cm.event_time,
+        cm.clicks_date,
+        cm.metrics_date
+      )) BETWEEN ? AND ?
+
+    GROUP BY cm.campaign_id, cm.pid, cm.os, cem.event_name, cem.event_type
   `;
 
   const params = [
@@ -202,57 +444,67 @@ WHERE LOWER(cm.campaign_name) = LOWER(?)
     primary.end,
     secondary.start,
     secondary.end,
+
     campaignName,
     os,
+
+    ...campaign_ids,
+    ...geo,
+
     ...eventNames,
+
     mtd.start,
     mtd.end,
   ];
 
   const [rows] = await db.execute(sql, params);
 
-  /*
-   * Build nested map:
-   * {
-   *   "PID123": {
-   *     "submit_success": { mtd_noe: 0, mtd_pe: 400, primary_noe: 0, ... },
-   *     ...
-   *   }
-   * }
-   */
   const map = {};
-  for (const row of rows) {
-    const pid = row.pid;
-    const ev = row.event_name;
-    const type = row.event_type; // 'noe' or 'pe'
 
-    if (!map[pid]) map[pid] = {};
-    if (!map[pid][ev]) map[pid][ev] = {};
+  for (const row of rows) {
+    const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
+    const ev = row.event_name;
+    const type = row.event_type;
+
+    if (!map[pidKey]) {
+      map[pidKey] = {};
+    }
+
+    if (!map[pidKey][ev]) {
+      map[pidKey][ev] = {};
+    }
 
     for (const win of ["mtd", "primary", "secondary"]) {
-      if (!map[pid][ev][win]) map[pid][ev][win] = { noe: 0, pe: 0 };
-      if (type === "noe")
-        map[pid][ev][win].noe += parseInt(row[`${win}_count`]) || 0;
-      if (type === "pe")
-        map[pid][ev][win].pe += parseInt(row[`${win}_count`]) || 0;
+      if (!map[pidKey][ev][win]) {
+        map[pidKey][ev][win] = { noe: 0, pe: 0 };
+      }
+
+      if (type === "noe") {
+        map[pidKey][ev][win].noe += parseInt(row[`${win}_count`]) || 0;
+      }
+
+      if (type === "pe") {
+        map[pidKey][ev][win].pe += parseInt(row[`${win}_count`]) || 0;
+      }
     }
   }
 
   return map;
 }
-
 // ─────────────────────────────────────────────
 // 5. Main orchestrator
 // ─────────────────────────────────────────────
 async function getCampaignAnalytics(payload) {
   const {
     campaign_name,
+    campaign_ids = [],
+    geo = [],
     os,
     start_date,
     end_date,
     windows: rawWindows = {},
   } = payload;
-
+  console.log("Received payload:", payload);
   const primaryDays = parseInt(rawWindows.primary) || 7;
   const secondaryDays = parseInt(rawWindows.secondary) || 3;
   // ── Step 1: Config ───────────────────────────────────────────────────────
@@ -276,8 +528,15 @@ async function getCampaignAnalytics(payload) {
 
   // ── Step 3 & 4: DB queries (parallel) ───────────────────────────────────
   const [metricsRows, eventMap_db] = await Promise.all([
-    fetchMetricsAllWindows(campaign_name, os, windows),
-    fetchEventMetricsAllWindows(campaign_name, os, windows, eventNames),
+    fetchMetricsAllWindows(campaign_name, os, geo, campaign_ids, windows),
+    fetchEventMetricsAllWindows(
+      campaign_name,
+      os,
+      geo,
+      campaign_ids,
+      windows,
+      eventNames,
+    ),
   ]);
 
   if (!metricsRows.length) {
@@ -287,14 +546,14 @@ async function getCampaignAnalytics(payload) {
   // ── Step 5 → 8: Per-PID assembly ────────────────────────────────────────
   const result = metricsRows.map((row) => {
     const pid = row.pid;
-
+    const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
     // Build aggregation objects per window
     const buildAgg = (prefix) => ({
       clicks: row[`${prefix}_clicks`],
       installs: row[`${prefix}_installs`],
       rti: row[`${prefix}_rti`],
       pi: row[`${prefix}_pi`],
-      events: buildEventAgg(eventMap, eventMap_db[pid], prefix),
+      events: buildEventAgg(eventMap, eventMap_db[pidKey], prefix),
     });
 
     const aggMtd = buildAgg("mtd");
