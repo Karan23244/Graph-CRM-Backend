@@ -403,9 +403,15 @@ function extractDate(row, headers, metricName) {
 // 1. UPDATE getAdvDataFromDB()
 // ==============================
 
-async function getAdvDataFromDB(campaignName, startDate, endDate, os,campaignIds,) {
- const [rows] = await pool.query(
-  `SELECT 
+async function getAdvDataFromDB(
+  campaignName,
+  startDate,
+  endDate,
+  os,
+  campaignIds,
+) {
+  const [rows] = await pool.query(
+    `SELECT 
       pid,
       pub_id,
       pub_name,
@@ -421,7 +427,7 @@ async function getAdvDataFromDB(campaignName, startDate, endDate, os,campaignIds
      AND campaign_id IN (?)
      AND DATE(shared_date) BETWEEN ? AND ?
      AND os = ?`,
-  [campaignName, campaignIds, startDate, endDate, os],
+    [campaignName, campaignIds, startDate, endDate, os],
   );
 
   const pidMap = new Map();
@@ -1083,9 +1089,9 @@ const handleUpload = async (req, res) => {
     // 🔥 Build mapping: (pid + date) → campaign_metrics_id
     const [cmRows] = await pool.query(
       `
-SELECT id, campaign_name, pid, metrics_date
+SELECT id, campaign_name, pid, metrics_date, os
 FROM campaign_metrics_new
-WHERE campaign_name = ?
+WHERE campaign_name = ? AND os = ?
 `,
       [fullCampaignName],
     );
@@ -1093,7 +1099,7 @@ WHERE campaign_name = ?
     const cmMap = new Map();
 
     for (const row of cmRows) {
-      const key = `${row.campaign_name}_${String(row.pid).trim().toLowerCase()}_${row.metrics_date}`;
+      const key = `${row.campaign_name}_${String(row.pid).trim().toLowerCase()}_${row.metrics_date}_${row.os}`;
       cmMap.set(key, row.id);
     }
     const eventData = [];
@@ -1109,7 +1115,7 @@ WHERE campaign_name = ?
         for (const [compoundKey, count] of eventMap.entries()) {
           const [eventType, eventName] = compoundKey.split("__");
 
-          const key = `${fullCampaignName}_${String(d.pid).trim().toLowerCase()}_${date}`;
+          const key = `${fullCampaignName}_${String(d.pid).trim().toLowerCase()}_${date}_${d.os}`;
 
           const campaignMetricsId = cmMap.get(key) || null;
 
