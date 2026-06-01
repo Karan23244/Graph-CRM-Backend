@@ -232,6 +232,18 @@ function applyDecisionMatrix(gradedMetrics) {
  * Only called when the row is eligible.
  */
 function evaluateStatus(gradedMetrics) {
+  // Stable if all active metrics are Grade A
+  const activeMetrics = Object.values(gradedMetrics).filter(
+    (m) => !m.ignored && m.grade !== null,
+  );
+
+  const allGradeA =
+    activeMetrics.length > 0 && activeMetrics.every((m) => m.grade === "A");
+
+  if (allGradeA) {
+    return "Stable";
+  }
+
   return applyFraudRule(gradedMetrics) ?? applyDecisionMatrix(gradedMetrics);
 }
 

@@ -112,8 +112,8 @@ exports.getAdvertiserAccount = async (req, res) => {
           aa.*,
           ad.adv_name,
           ad.note
-        FROM advertiser_account aa
-        JOIN advids ad ON aa.adv_id = ad.adv_id
+          FROM advertiser_account aa
+          LEFT JOIN advids ad ON aa.adv_id = ad.adv_id
         ${month ? "WHERE aa.month = ?" : ""}
         ORDER BY aa.month DESC
       `,
@@ -133,8 +133,8 @@ exports.getAdvertiserAccount = async (req, res) => {
           aa.*,
           ad.adv_name,
           ad.note
-        FROM advertiser_account aa
-        JOIN advids ad ON aa.adv_id = ad.adv_id
+          FROM advertiser_account aa
+          LEFT JOIN advids ad ON aa.adv_id = ad.adv_id
         WHERE ad.user_id IN (?)
         ${month ? "AND aa.month = ?" : ""}
         ORDER BY aa.month DESC
@@ -153,8 +153,8 @@ exports.getAdvertiserAccount = async (req, res) => {
           aa.*,
           ad.adv_name,
           ad.note
-        FROM advertiser_account aa
-        JOIN advids ad ON aa.adv_id = ad.adv_id
+          FROM advertiser_account aa
+        LEFT JOIN advids ad ON aa.adv_id = ad.adv_id
         WHERE ad.user_id = ?
         ${month ? "AND aa.month = ?" : ""}
         ORDER BY aa.month DESC
@@ -177,100 +177,223 @@ exports.getAdvertiserAccount = async (req, res) => {
     });
   }
 };
+exports.createManualAdvertiserAccount = async (req, res) => {
+  console.log("MANUAL API HIT", req.body);
+  try {
+    const {
+      adv_id,
+      month,
+      total_amount,
+      payment_terms,
+      payment_status,
+      amount_raised,
+      invoice_number,
+      invoice_date,
+      invoice_from,
+      invoice_to,
+      currency,
+      payment_date,
+    } = req.body;
 
-// // UPDATE advertiser account
-// exports.updateAdvertiserAccount = async (req, res) => {
-//   const {
-//     adv_id,
-//     month,
-//     payment_terms,
-//     payment_status,
-//     amount_raised,
-//     invoice_number,
-//     invoice_date,
-//     invoice_from,
-//     invoice_to,
-//     currency,
-//     payment_date,
-//   } = req.body;
+    if (!adv_id || !month) {
+      return res.status(400).json({
+        success: false,
+        message: "adv_id and month are required",
+      });
+    }
 
-//   try {
-//     await pool.query(
-//       `
-//       UPDATE advertiser_account
-//       SET 
-//         payment_terms = ?,
-//         payment_status = ?,
-//         amount_raised = ?,
-//         invoice_number = ?,
-//         invoice_date = ?,
-//         invoice_from = ?,
-//         invoice_to = ?,
-//         currency = ?,
-//         payment_date = ?
-//       WHERE adv_id = ? AND month = ?
-//       `,
-//       [
-//         payment_terms,
-//         payment_status,
-//         amount_raised,
-//         invoice_number,
-//         invoice_date,
-//         invoice_from,
-//         invoice_to,
-//         currency,
-//         payment_date,
-//         adv_id,
-//         month,
-//       ],
-//     );
+    // Check existing record
+    const [existing] = await pool.query(
+      `
+  SELECT id
+  FROM advertiser_account
+  WHERE adv_id = ?
+    AND month = ?
+    AND is_manual = 1
+  `,
+      [adv_id, month],
+    );
 
-//     res.json({ message: "Updated Successfully" });
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ error: "Update failed" });
-//   }
-// };
+    if (existing.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Manual record already exists",
+      });
+    }
+
+    console.log("EXISTING:", existing);
+    if (existing.length) {
+      return res.status(400).json({
+        success: false,
+        message: "Record already exists for this advertiser and month",
+      });
+    }
+
+    await pool.query(
+      `
+      INSERT INTO advertiser_account (
+        adv_id,
+        month,
+        total_amount,
+        payment_terms,
+        payment_status,
+        amount_raised,
+        invoice_number,
+        invoice_date,
+        invoice_from,
+        invoice_to,
+        currency,
+        payment_date,
+        is_manual
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+      `,
+      [
+        adv_id,
+        month,
+        total_amount || 0,
+        payment_terms || null,
+        payment_status || "Pending",
+        amount_raised || 0,
+        invoice_number || null,
+        invoice_date || null,
+        invoice_from || null,
+        invoice_to || null,
+        currency || "USD",
+        payment_date || null,
+      ],
+    );
+
+    res.json({
+      success: true,
+      message: "Manual record created successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
 
 exports.updateAdvertiserAccount = async (req, res) => {
-  const { adv_id, month, ...fields } = req.body;
-
+  const { id, ...fields } = req.body;
+  console.log("UPDATE API HIT", req.body);
   try {
-    // remove undefined values
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "id is required",
+      });
+    }
+
     Object.keys(fields).forEach((key) => {
       if (fields[key] === undefined) {
         delete fields[key];
       }
     });
 
-    const keys = Object.keys(fields);
-
-    if (!keys.length) {
-      return res.status(400).json({
-        error: "No fields provided",
-      });
-    }
-
-    const setClause = keys.map((key) => `${key} = ?`).join(", ");
-
-    const values = keys.map((key) => fields[key]);
-
-    await pool.query(
+    const [existing] = await pool.query(
       `
+  SELECT id
+  FROM advertiser_account
+  WHERE id = ?
+  `,
+      [id],
+    );
+    console.log("EXISTING:", existing);
+    // Record exists → update
+    if (existing.length > 0) {
+      const keys = Object.keys(fields);
+
+      if (keys.length) {
+        const setClause = keys.map((key) => `${key} = ?`).join(", ");
+
+        await pool.query(
+          `
       UPDATE advertiser_account
       SET ${setClause}
-      WHERE adv_id = ? AND month = ?
+      WHERE id = ?
       `,
-      [...values, adv_id, month],
-    );
+          [...keys.map((k) => fields[k]), id],
+        );
+      }
+    }
 
+    // Record does not exist → create
+    else {
+      await pool.query(
+        `
+        INSERT INTO advertiser_account
+        (
+          adv_id,
+          month,
+          payment_terms,
+          payment_status,
+          amount_raised,
+          invoice_number,
+          invoice_date,
+          invoice_from,
+          invoice_to,
+          currency,
+          payment_date
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        [
+          adv_id,
+          month,
+          fields.payment_terms || null,
+          fields.payment_status || "Pending",
+          fields.amount_raised || 0,
+          fields.invoice_number || null,
+          fields.invoice_date || null,
+          fields.invoice_from || null,
+          fields.invoice_to || null,
+          fields.currency || "USD",
+          fields.payment_date || null,
+        ],
+      );
+    }
+
+    // Fetch updated row
+    const [rows] = await pool.query(
+      `
+SELECT
+  id,
+  adv_id,
+  month,
+  payment_terms,
+  total_amount,
+  payment_status,
+  amount_raised,
+  invoice_number,
+
+  DATE_FORMAT(invoice_date,'%Y-%m-%d') AS invoice_date,
+  DATE_FORMAT(invoice_from,'%Y-%m-%d') AS invoice_from,
+  DATE_FORMAT(invoice_to,'%Y-%m-%d') AS invoice_to,
+  DATE_FORMAT(payment_date,'%Y-%m-%d') AS payment_date,
+
+  currency,
+  is_manual,
+  created_at,
+  updated_at
+FROM advertiser_account
+WHERE id = ?
+  `,
+      [id],
+    );
     res.json({
-      message: "Updated Successfully",
+      success: true,
+      data: rows[0],
     });
   } catch (err) {
     console.error(err);
+
     res.status(500).json({
-      error: "Update failed",
+      success: false,
+      message: "Save failed",
     });
   }
 };
