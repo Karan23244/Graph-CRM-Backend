@@ -54,30 +54,19 @@ exports.getUniqueCampaigns = async (req, res) => {
   try {
     const { user_id, role, assign_subadmins = [] } = req.body;
 
-    console.log(
-      "Fetching unique campaigns for user_id:",
-      user_id,
-      "role:",
-      role,
-      "assign_subadmins:",
-      assign_subadmins,
-    );
-
     const restrictedRoles = [
       "advertiser",
       "advertiser_manager",
       "adv_executive",
     ];
 
-    let query = "";
+    let configQuery = "";
     let params = [];
 
-    // ==============================
-    // RESTRICTED ROLES
-    // ==============================
+    // ==================================================
+    // RESTRICTED USERS
+    // ==================================================
     if (Array.isArray(role) && role.some((r) => restrictedRoles.includes(r))) {
-      console.log("User role requires campaign filtering:", role);
-
       const allowedUsers = [String(user_id)];
 
       if (Array.isArray(assign_subadmins)) {
@@ -88,65 +77,90 @@ exports.getUniqueCampaigns = async (req, res) => {
 
       const placeholders = allowedUsers.map(() => "?").join(",");
 
-      query = `
-      SELECT
-      cmn.campaign_name,
-      cmn.os,
-      GROUP_CONCAT(DISTINCT cmn.geo SEPARATOR '|||') AS geos,
-      GROUP_CONCAT(DISTINCT cmn.campaign_id) AS campaign_ids
-    FROM campaign_metrics_new cmn
-    INNER JOIN campaign_data cd
-      ON cmn.campaign_id = cd.id
-    WHERE cd.user_id IN (${placeholders})
-      AND cmn.campaign_name IS NOT NULL
-      AND cmn.campaign_name != ''
-    GROUP BY
-      cmn.campaign_name,
-      cmn.os
-    ORDER BY cmn.campaign_name ASC;
+      configQuery = `
+        SELECT DISTINCT
+          cc.id,
+          cc.campaign_name,
+          cc.campaign_id,
+          cc.os
+        FROM campaign_configs cc
+        INNER JOIN campaign_data cd
+          ON FIND_IN_SET(
+               cd.id,
+               REPLACE(
+                 REPLACE(
+                   REPLACE(cc.campaign_id, '[', ''),
+                 ']', ''),
+               '"', '')
+             ) > 0
+        WHERE cd.user_id IN (${placeholders})
+        ORDER BY cc.id ASC
       `;
 
       params = allowedUsers;
-    }
-
-    // ==============================
-    // ALL OTHER ROLES
-    // ==============================
-    else {
-      query = `
-    SELECT
-      campaign_name,
-      os,
-      GROUP_CONCAT(DISTINCT geo SEPARATOR '|||') AS geos,
-      GROUP_CONCAT(DISTINCT campaign_id) AS campaign_ids
-    FROM campaign_metrics_new
-    WHERE campaign_name IS NOT NULL
-      AND campaign_name != ''
-    GROUP BY
-      campaign_name,
-      os
-    ORDER BY campaign_name ASC;
+    } else {
+      // ==================================================
+      // ADMIN / SUPERADMIN
+      // ==================================================
+      configQuery = `
+        SELECT
+          id,
+          campaign_name,
+          campaign_id,
+          os
+        FROM campaign_configs
+        ORDER BY id ASC
       `;
     }
 
-    const [rows] = await db.query(query, params);
+    const [configs] = await db.query(configQuery, params);
 
-    const formattedData = rows.map((row) => ({
-      campaign_name: row.campaign_name,
+    const result = [];
 
-      os: row.os,
+    for (const row of configs) {
+      let campaignIds = [];
+      let campaignName = "";
 
-      geo: row.geos ? row.geos.split("|||").filter(Boolean) : [],
+      try {
+        campaignIds = JSON.parse(row.campaign_id || "[]");
+        campaignName = JSON.parse(row.campaign_name || "[]")[0] || "";
+      } catch (e) {
+        console.error("JSON parse error:", e);
+        continue;
+      }
 
-      campaign_ids: row.campaign_ids
-        ? row.campaign_ids.split(",").map((id) => Number(id))
-        : [],
-    }));
+      let geos = [];
+
+      if (campaignIds.length) {
+        const placeholders = campaignIds.map(() => "?").join(",");
+
+        const [geoRows] = await db.query(
+          `
+          SELECT DISTINCT geo
+          FROM campaign_metrics_new
+          WHERE campaign_id IN (${placeholders})
+            AND geo IS NOT NULL
+            AND geo != ''
+          `,
+          campaignIds,
+        );
+
+        geos = geoRows.map((g) => g.geo).filter(Boolean);
+      }
+
+      result.push({
+        config_id: row.id,
+        campaign_name: campaignName,
+        campaign_ids: campaignIds,
+        os: row.os,
+        geo: geos,
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      count: formattedData.length,
-      data: formattedData,
+      count: result.length,
+      data: result,
     });
   } catch (error) {
     console.error("Error fetching campaigns:", error);

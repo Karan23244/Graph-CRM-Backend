@@ -955,7 +955,7 @@ const handleUpload = async (req, res) => {
           pidLower: pid,
           pubid: "N/A",
           pubam: "N/A",
-          campaign_id: null,
+          campaign_id: campaignIds.length === 1 ? campaignIds[0] : "N/A", // assign if only one campaign ID
           shared_date: null,
           campaign_name: baseCampaignName,
           pause: 0,

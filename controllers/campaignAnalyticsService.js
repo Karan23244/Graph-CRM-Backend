@@ -45,14 +45,14 @@ async function fetchCampaignConfig(campaignName, os) {
 // ─────────────────────────────────────────────
 function buildEventMap(eventsArr) {
   const map = {};
-  let idx = 1;
-  for (const ev of eventsArr) {
+
+  eventsArr.forEach((ev, index) => {
     if (ev && ev.trim()) {
-      map[`E${idx}`] = ev.trim();
-      idx++;
+      map[`E${index + 1}`] = ev.trim();
     }
-  }
-  return map; // { E1: 'submit_success', E2: 'kyc_complete' }
+  });
+
+  return map;
 }
 
 // ─────────────────────────────────────────────
