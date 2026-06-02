@@ -93,7 +93,7 @@ function applyColors(kpis, rule1, rule2, eventKeys) {
     // pae count
     result[`pae_${eKey}`] = withColor(
       kpis[`pae_${eKey}`],
-      rule2?.[`PAE${ruleKeyIdx}`],
+      rule2?.[`PA ${eKey}`],
     );
   });
 

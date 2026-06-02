@@ -1,30 +1,37 @@
 "use strict";
 
 const buildGeoCondition = (geo = []) =>
-  geo.map(() => `JSON_CONTAINS(geo, JSON_ARRAY(?))`).join(" OR ");
+  geo.length
+    ? geo.map(() => `JSON_CONTAINS(geo, JSON_ARRAY(?))`).join(" OR ")
+    : "";
 
 const buildGeoConditionCM = (geo = []) =>
-  geo.map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`).join(" OR ");
+  geo.length
+    ? geo.map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`).join(" OR ")
+    : "";
 
 const buildCampaignCondition = (
   campaignPlaceholders,
   geoCondition,
   alias = "",
-) => `
-(
-  ${alias}campaign_id IN (${campaignPlaceholders})
+) => {
+  const conditions = [];
 
-  OR (
+  if (campaignPlaceholders) {
+    conditions.push(`${alias}campaign_id IN (${campaignPlaceholders})`);
+  }
 
-    (${alias}campaign_id IS NULL OR ${alias}campaign_id = '')
+  if (geoCondition) {
+    conditions.push(`
+      (
+        (${alias}campaign_id IS NULL OR ${alias}campaign_id = '')
+        AND (${geoCondition})
+      )
+    `);
+  }
 
-    AND (
-      ${geoCondition}
-    )
-
-  )
-)
-`;
+  return conditions.length ? `(${conditions.join(" OR ")})` : "1=1";
+};
 
 const QUERIES = {
   /**
@@ -62,7 +69,9 @@ const QUERIES = {
    * ]
    */
   GET_CLICK_METRICS: (campaign_ids, geo) => {
-    const campaignPlaceholders = campaign_ids.map(() => "?").join(",");
+    const campaignPlaceholders = campaign_ids.length
+      ? campaign_ids.map(() => "?").join(",")
+      : "";
     const geoCondition = buildGeoCondition(geo);
 
     return `
@@ -109,10 +118,12 @@ const QUERIES = {
    * ]
    */
   GET_INSTALL_METRICS: (campaign_ids, geo) => {
-    const campaignPlaceholders = campaign_ids.map(() => "?").join(",");
+    const campaignPlaceholders = campaign_ids.length
+      ? campaign_ids.map(() => "?").join(",")
+      : "";
     const geoCondition = buildGeoCondition(geo);
 
-return `
+    return `
   SELECT
     pubam,
     pubid,
@@ -159,7 +170,9 @@ return `
    * ]
    */
   GET_EVENT_METRICS: (campaign_ids, geo) => {
-    const campaignPlaceholders = campaign_ids.map(() => "?").join(",");
+    const campaignPlaceholders = campaign_ids.length
+      ? campaign_ids.map(() => "?").join(",")
+      : "";
     const geoCondition = buildGeoConditionCM(geo);
 
     return `

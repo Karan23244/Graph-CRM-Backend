@@ -157,8 +157,13 @@ async function fetchMetricsAllWindows(
 ) {
   const { mtd, primary, secondary } = windows;
 
-  const campaignPlaceholders = campaign_ids.map(() => "?").join(",");
-  const geoPlaceholders = geo.map(() => "?").join(",");
+  const campaignPlaceholders =
+    campaign_ids.length > 0 ? campaign_ids.map(() => "?").join(",") : "NULL";
+
+  const geoCondition =
+    geo.length > 0
+      ? geo.map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`).join(" OR ")
+      : null;
 
   const sql = `
     SELECT
@@ -211,19 +216,19 @@ async function fetchMetricsAllWindows(
 
     WHERE LOWER(cm.campaign_name) = LOWER(?)
       AND LOWER(cm.os) = LOWER(?)
-   AND (
-  cm.campaign_id IN (${campaignPlaceholders})
-
-  OR (
-
-    (cm.campaign_id IS NULL OR cm.campaign_id = '')
-
     AND (
-      ${geo.map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`).join(" OR ")}
+      cm.campaign_id IN (${campaignPlaceholders})
+      ${
+        geoCondition
+          ? `
+          OR (
+            (cm.campaign_id IS NULL OR cm.campaign_id = '')
+            AND (${geoCondition})
+          )
+        `
+          : ""
+      }
     )
-
-  )
-)
 
       AND DATE(COALESCE(
         cm.install_time,
@@ -385,8 +390,13 @@ async function fetchEventMetricsAllWindows(
   const { mtd, primary, secondary } = windows;
 
   const evPlaceholders = eventNames.map(() => "?").join(",");
-  const campaignPlaceholders = campaign_ids.map(() => "?").join(",");
-  const geoPlaceholders = geo.map(() => "?").join(",");
+  const campaignPlaceholders =
+    campaign_ids.length > 0 ? campaign_ids.map(() => "?").join(",") : "NULL";
+
+  const geoCondition =
+    geo.length > 0
+      ? geo.map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`).join(" OR ")
+      : null;
 
   const sql = `
     SELECT
@@ -411,19 +421,19 @@ async function fetchEventMetricsAllWindows(
     WHERE LOWER(cm.campaign_name) = LOWER(?)
       AND LOWER(cm.os) = LOWER(?)
 
-  AND (
-  cm.campaign_id IN (${campaignPlaceholders})
-
-  OR (
-
-    (cm.campaign_id IS NULL OR cm.campaign_id = '')
-
     AND (
-      ${geo.map(() => `JSON_CONTAINS(cm.geo, JSON_ARRAY(?))`).join(" OR ")}
+      cm.campaign_id IN (${campaignPlaceholders})
+      ${
+        geoCondition
+          ? `
+          OR (
+            (cm.campaign_id IS NULL OR cm.campaign_id = '')
+            AND (${geoCondition})
+          )
+        `
+          : ""
+      }
     )
-
-  )
-)
 
       AND cem.event_name IN (${evPlaceholders})
 
