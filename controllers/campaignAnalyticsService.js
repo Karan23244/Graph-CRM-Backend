@@ -216,19 +216,17 @@ async function fetchMetricsAllWindows(
 
     WHERE LOWER(cm.campaign_name) = LOWER(?)
       AND LOWER(cm.os) = LOWER(?)
-    AND (
-      cm.campaign_id IN (${campaignPlaceholders})
-      ${
-        geoCondition
-          ? `
-          OR (
-            (cm.campaign_id IS NULL OR cm.campaign_id = '')
-            AND (${geoCondition})
+      AND (
+        cm.campaign_id IN (${campaignPlaceholders})
+        OR (
+          (
+            cm.campaign_id IS NULL
+            OR cm.campaign_id = ''
+            OR cm.campaign_id = 'N/A'
           )
-        `
-          : ""
-      }
-    )
+          AND (${geoCondition})
+        )
+      )
 
       AND DATE(COALESCE(
         cm.install_time,
@@ -423,16 +421,14 @@ async function fetchEventMetricsAllWindows(
 
     AND (
       cm.campaign_id IN (${campaignPlaceholders})
-      ${
-        geoCondition
-          ? `
-          OR (
-            (cm.campaign_id IS NULL OR cm.campaign_id = '')
-            AND (${geoCondition})
-          )
-        `
-          : ""
-      }
+      OR (
+        (
+          cm.campaign_id IS NULL
+          OR cm.campaign_id = ''
+          OR cm.campaign_id = 'N/A'
+        )
+        AND (${geoCondition})
+      )
     )
 
       AND cem.event_name IN (${evPlaceholders})

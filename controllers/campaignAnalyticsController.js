@@ -130,22 +130,31 @@ exports.getUniqueCampaigns = async (req, res) => {
       }
 
       let geos = [];
+      let availableDates = [];
 
       if (campaignIds.length) {
         const placeholders = campaignIds.map(() => "?").join(",");
 
-        const [geoRows] = await db.query(
+        const [metricRows] = await db.query(
           `
-          SELECT DISTINCT geo
-          FROM campaign_metrics_new
-          WHERE campaign_id IN (${placeholders})
-            AND geo IS NOT NULL
-            AND geo != ''
-          `,
+    SELECT DISTINCT
+      geo,
+      COALESCE(clicks_date, metrics_date) AS metric_date
+    FROM campaign_metrics_new
+    WHERE campaign_id IN (${placeholders})
+      AND (
+        (geo IS NOT NULL AND geo != '')
+        OR COALESCE(clicks_date, metrics_date) IS NOT NULL
+      )
+    `,
           campaignIds,
         );
 
-        geos = geoRows.map((g) => g.geo).filter(Boolean);
+        geos = [...new Set(metricRows.map((row) => row.geo).filter(Boolean))];
+
+        availableDates = [
+          ...new Set(metricRows.map((row) => row.metric_date).filter(Boolean)),
+        ].sort();
       }
 
       result.push({
@@ -154,6 +163,7 @@ exports.getUniqueCampaigns = async (req, res) => {
         campaign_ids: campaignIds,
         os: row.os,
         geo: geos,
+        available_dates: availableDates,
       });
     }
 
