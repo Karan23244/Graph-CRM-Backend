@@ -430,22 +430,27 @@ async function getAdvDataFromDB(
     [campaignName, campaignIds, startDate, endDate, os],
   );
 
+  // Sort latest shared_date first
+  rows.sort(
+    (a, b) => new Date(b.shared_date || 0) - new Date(a.shared_date || 0),
+  );
+
   const pidMap = new Map();
 
   for (const r of rows) {
-    const pidKey = String(r.pid || "")
-      .trim()
-      .toLowerCase();
+    const pidKey = `${r.pid}_${r.pub_id}_${r.pub_name}`.toLowerCase();
 
     if (!pidMap.has(pidKey)) {
       pidMap.set(pidKey, {
         pid: String(r.pid || "").trim(),
-        pidLower: pidKey,
+        pidLower: String(r.pid || "")
+          .trim()
+          .toLowerCase(),
         pubid: String(r.pub_id || "").trim(),
         pubam: String(r.pub_name || "").trim(),
         campaign_name: r.campaign_name,
-        campaign_id: r.campaign_id, // ✅ NEW
-        shared_date: r.shared_date, // ✅ NEW
+        campaign_id: r.campaign_id,
+        shared_date: r.shared_date,
         pause: r.paused_date ? 1 : 0,
         nocrm: 0,
         os: r.os,
