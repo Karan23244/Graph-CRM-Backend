@@ -167,7 +167,7 @@ async function fetchMetricsAllWindows(
 
   const sql = `
     SELECT
-     cm.campaign_id,
+      GROUP_CONCAT(DISTINCT cm.campaign_id) AS campaign_ids,
       cm.pubam,
       cm.pubid,
       cm.pid,
@@ -235,7 +235,7 @@ async function fetchMetricsAllWindows(
         cm.metrics_date
       )) BETWEEN ? AND ?
 
-    GROUP BY cm.pubam, cm.pubid, cm.pid, cm.os, cm.campaign_id
+    GROUP BY cm.pubam, cm.pubid, cm.pid, cm.os
   `;
 
   const params = [
