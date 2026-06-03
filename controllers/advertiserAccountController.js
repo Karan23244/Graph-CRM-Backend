@@ -202,32 +202,32 @@ exports.createManualAdvertiserAccount = async (req, res) => {
       });
     }
 
-    // Check existing record
-    const [existing] = await pool.query(
-      `
-  SELECT id
-  FROM advertiser_account
-  WHERE adv_id = ?
-    AND month = ?
-    AND is_manual = 1
-  `,
-      [adv_id, month],
-    );
+  //   // Check existing record
+  //   const [existing] = await pool.query(
+  //     `
+  // SELECT id
+  // FROM advertiser_account
+  // WHERE adv_id = ?
+  //   AND month = ?
+  //   AND is_manual = 1
+  // `,
+  //     [adv_id, month],
+  //   );
 
-    if (existing.length) {
-      return res.status(400).json({
-        success: false,
-        message: "Manual record already exists",
-      });
-    }
+  //   if (existing.length) {
+  //     return res.status(400).json({
+  //       success: false,
+  //       message: "Manual record already exists",
+  //     });
+  //   }
 
-    console.log("EXISTING:", existing);
-    if (existing.length) {
-      return res.status(400).json({
-        success: false,
-        message: "Record already exists for this advertiser and month",
-      });
-    }
+  //   console.log("EXISTING:", existing);
+  //   if (existing.length) {
+  //     return res.status(400).json({
+  //       success: false,
+  //       message: "Record already exists for this advertiser and month",
+  //     });
+  //   }
 
     await pool.query(
       `
