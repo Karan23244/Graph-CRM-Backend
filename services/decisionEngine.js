@@ -5,7 +5,7 @@
  */
 
 "use strict";
-
+const { getDecisionMatrix } = require("./decisionMatrixStore");
 // ─────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────
@@ -223,8 +223,17 @@ function applyDecisionMatrix(gradedMetrics) {
       return METRIC_PRIORITY.indexOf(ma) - METRIC_PRIORITY.indexOf(mb);
     });
 
-  const key = active.map(([metric]) => metric).join("|");
-  return DECISION_MATRIX[key] ?? "Stable";
+  const key = [
+    gradedMetrics.c2i.grade,
+    gradedMetrics.fraud.grade,
+    gradedMetrics.i2e2.grade,
+    gradedMetrics.pa_e2.grade,
+  ].join("|");
+  console.log(`Constructed decision key: ${key}`);
+  const matrix = getDecisionMatrix();
+  console.log(`Decision key: ${key}`);
+  console.log(`Matrix lookup result: ${matrix[key]}`);
+  return matrix[key] ?? "Stable";
 }
 
 /**

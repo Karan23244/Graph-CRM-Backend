@@ -172,7 +172,7 @@ async function fetchMetricsAllWindows(
       cm.pubid,
       cm.pid,
       MAX(cm.is_paused) AS is_paused,
-
+      SUM(cm.impressions) AS total_impressions,
       /* MTD */
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.clicks ELSE 0 END) AS mtd_clicks,
@@ -595,6 +595,7 @@ async function getCampaignAnalytics(payload) {
       pubid: row.pubid,
       pubam: row.pubam,
       pid_color: pidColor,
+      total_impressions: row.total_impressions,
       mtd: coloredMtd,
       primary: coloredPrimary,
       secondary: coloredSecondary,
@@ -681,6 +682,7 @@ function flattenRow({
   pubid,
   pubam,
   pid_color,
+  total_impressions,
   mtd,
   primary,
   secondary,
@@ -689,7 +691,7 @@ function flattenRow({
   secondaryLabel,
 }) {
   const row = { pid, pubid, pubam, pid_color };
-
+  row.impressions = Number(total_impressions) || 0;
   // safely extract numeric value
   const getValue = (val) => {
     if (typeof val === "object" && val !== null && "value" in val) {

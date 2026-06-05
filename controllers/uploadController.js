@@ -543,6 +543,7 @@ const handleUpload = async (req, res) => {
       pi: new Map(),
       noe: new Map(),
       clicks: new Map(),
+      impressions: new Map(),
     };
     const eventCountsByPidDate = new Map();
     const eventTypeCounts = new Map();
@@ -737,33 +738,6 @@ const handleUpload = async (req, res) => {
               );
             }
           }
-
-          // ---- Fallback NOE: SUM all columns starting with
-          // "uniqueusersltvdayscumulativeappsflyer"
-          // ----
-          // if (!uploadedMetricNames.has("noe")) {
-          //   let noeSum = 0;
-
-          //   normHeaders.forEach((normHeader, idx) => {
-          //     if (
-          //       normHeader.startsWith("uniqueusersltvdayscumulativeappsflyer")
-          //     ) {
-          //       const originalKey = headers[idx];
-          //       const val =
-          //         Number(
-          //           (row[originalKey] || "").toString().replace(/,/g, ""),
-          //         ) || 0;
-          //       noeSum += val;
-          //     }
-          //   });
-
-          //   if (noeSum > 0) {
-          //     incIfPidDate(metricCounts.noe, pid, metricsDate, noeSum);
-          //     console.log(
-          //       `📊 [Fallback NOE SUM] PID=${pid}, date=${metricsDate}, noe=${noeSum}`,
-          //     );
-          //   }
-          // }
           // ---- Fallback NOE from Clicks File Dynamic Event Columns ----
           if (!uploadedMetricNames.has("noe")) {
             const PREFIX = "uniqueusersltvdayscumulativeappsflyer";
@@ -819,6 +793,29 @@ const handleUpload = async (req, res) => {
                 `📊 [Fallback NOE TOTAL] PID=${pid}, date=${metricsDate}, total=${totalNoe}`,
               );
             }
+          }
+          // ---- Impressions ----
+          const impressionsIdx = normHeaders.findIndex(
+            (c) => c === "impressions" || c === "impression",
+          );
+
+          if (impressionsIdx !== -1) {
+            const impressionsKey = headers[impressionsIdx];
+
+            const impressionsVal =
+              Number(
+                (row[impressionsKey] || "").toString().replace(/,/g, ""),
+              ) || 0;
+
+            incIfPidDate(
+              metricCounts.impressions,
+              pid,
+              metricsDate,
+              impressionsVal,
+            );
+          } else {
+            // If column doesn't exist, store 0
+            incIfPidDate(metricCounts.impressions, pid, metricsDate, 0);
           }
           return;
         }
@@ -1020,6 +1017,7 @@ const handleUpload = async (req, res) => {
           pi: metricCounts.pi.get(pidLower)?.get(date) || 0,
           noe: metricCounts.noe.get(pidLower)?.get(date) || 0,
           clicks: metricCounts.clicks.get(pidLower)?.get(date) || 0,
+          impressions: metricCounts.impressions.get(pidLower)?.get(date) || 0,
         };
 
         metricsData.push([
@@ -1038,6 +1036,7 @@ const handleUpload = async (req, res) => {
           metrics.pi,
           metrics.noe,
           metrics.clicks,
+          metrics.impressions,
           d.pause,
           d.nocrm,
 
@@ -1069,6 +1068,7 @@ const handleUpload = async (req, res) => {
     pi,
     noe,
     clicks,
+    impressions,
     is_paused,
     nocrm,
 
@@ -1084,6 +1084,7 @@ const handleUpload = async (req, res) => {
     pi = VALUES(pi),
     noe = VALUES(noe),
     clicks = VALUES(clicks),
+    impressions = VALUES(impressions),
     install_time = VALUES(install_time),
     event_time = VALUES(event_time),
     clicks_date = VALUES(clicks_date),
