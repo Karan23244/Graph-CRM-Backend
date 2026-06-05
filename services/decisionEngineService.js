@@ -144,6 +144,7 @@ async function runDecisionEngine({
 
       date,
       date,
+      date,
     ]),
 
     db.query(QUERIES.GET_INSTALL_METRICS(campaign_ids, geo), [
@@ -156,6 +157,7 @@ async function runDecisionEngine({
       ...campaign_ids,
       ...geo,
 
+      date,
       date,
       date,
     ]),
@@ -172,9 +174,10 @@ async function runDecisionEngine({
 
       date,
       date,
+      date,
     ]),
   ]);
-
+  
   // ── STEP C: Index each result set by group key ────────────────────────────
   //
   // Group key = "pubam||pubid||pid"

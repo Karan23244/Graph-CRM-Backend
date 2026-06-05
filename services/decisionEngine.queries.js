@@ -99,8 +99,12 @@ const QUERIES = {
         AND os = ?
 
         AND ${buildCampaignCondition(campaignPlaceholders, geoCondition)}
+
         AND COALESCE(clicks_date, metrics_date)
-       BETWEEN DATE_SUB(?, INTERVAL 6 DAY) AND ?
+            BETWEEN DATE_SUB(?, INTERVAL 6 DAY) AND ?
+
+        AND ? BETWEEN shared_date
+                  AND DATE_ADD(shared_date, INTERVAL 6 DAY)
 
       GROUP BY pubam, pubid, pid
     `;
@@ -152,6 +156,8 @@ const QUERIES = {
     AND DATE(COALESCE(install_time, metrics_date))
         BETWEEN DATE_SUB(?, INTERVAL 6 DAY) AND ?
 
+        AND ? BETWEEN shared_date
+                  AND DATE_ADD(shared_date, INTERVAL 6 DAY)
   GROUP BY pubam, pubid, pid
 `;
   },
@@ -221,6 +227,8 @@ const QUERIES = {
         AND cem.metrics_date
           BETWEEN DATE_SUB(?, INTERVAL 6 DAY) AND ?
 
+        AND ? BETWEEN shared_date
+          AND DATE_ADD(shared_date, INTERVAL 6 DAY)
       GROUP BY cm.pubam, cm.pubid, cm.pid
     `;
   },
