@@ -172,18 +172,19 @@ function checkEligibility({
   const clickCap = clicks5d >= clicksPerDay * 5;
   const installCap = installs5d >= installsPerDay * 5;
 
-  let linkActive = false;
+  let minSharedDaysReached = false;
+
   if (sharedDate) {
     const threshold = new Date(sharedDate);
     threshold.setDate(threshold.getDate() + 5);
-    linkActive = threshold <= new Date(selectedDate);
-  }
 
+    minSharedDaysReached = new Date(selectedDate) >= threshold;
+  }
   return {
     clickCap,
     installCap,
-    linkActive,
-    eligible: clickCap || installCap || linkActive,
+    minSharedDaysReached,
+    eligible: clickCap || installCap || minSharedDaysReached,
   };
 }
 

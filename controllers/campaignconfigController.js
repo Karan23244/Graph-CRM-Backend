@@ -297,6 +297,67 @@ exports.updateCampaignConfig = async (req, res) => {
   }
 };
 
+// exports.getConfiguredCampaigns = async (req, res) => {
+//   try {
+//     const [rows] = await db.query(`
+//       SELECT
+//         id,
+//         campaign_id,
+//         campaign_name,
+//         os,
+//         created_at,
+//         updated_at
+//       FROM campaign_configs
+//       ORDER BY updated_at DESC
+//     `);
+
+//     const safeParseArray = (value) => {
+//       try {
+//         const parsed = JSON.parse(value);
+
+//         return Array.isArray(parsed) ? parsed : [parsed];
+//       } catch {
+//         return value ? [value] : [];
+//       }
+//     };
+
+//     const formatted = rows.flatMap((row) => {
+//       const campaignIds = safeParseArray(row.campaign_id);
+
+//       const campaignNames = [...new Set(safeParseArray(row.campaign_name))];
+
+//       return campaignNames.map((campaignName) => ({
+//         config_id: row.id,
+
+//         campaign_name: campaignName,
+
+//         campaign_ids: campaignIds,
+
+//         total_campaign_ids: campaignIds.length,
+
+//         os: row.os,
+
+//         created_at: row.created_at,
+
+//         updated_at: row.updated_at,
+//       }));
+//     });
+
+//     return res.json({
+//       success: true,
+//       count: formatted.length,
+//       data: formatted,
+//     });
+//   } catch (err) {
+//     console.error("getConfiguredCampaigns error:", err);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch configured campaigns",
+//     });
+//   }
+// };
+
 exports.getConfiguredCampaigns = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -314,39 +375,54 @@ exports.getConfiguredCampaigns = async (req, res) => {
     const safeParseArray = (value) => {
       try {
         const parsed = JSON.parse(value);
-
         return Array.isArray(parsed) ? parsed : [parsed];
       } catch {
         return value ? [value] : [];
       }
     };
 
-    const formatted = rows.flatMap((row) => {
-      const campaignIds = safeParseArray(row.campaign_id);
+    const formatted = await Promise.all(
+      rows.flatMap(async (row) => {
+        const campaignIds = safeParseArray(row.campaign_id);
+        const campaignNames = [...new Set(safeParseArray(row.campaign_name))];
 
-      const campaignNames = [...new Set(safeParseArray(row.campaign_name))];
+        // Fetch geos for all selected campaign ids
+        let geos = [];
 
-      return campaignNames.map((campaignName) => ({
-        config_id: row.id,
+        if (campaignIds.length > 0) {
+          const placeholders = campaignIds.map(() => "?").join(",");
 
-        campaign_name: campaignName,
+          const [geoRows] = await db.query(
+            `
+            SELECT DISTINCT geo
+            FROM campaign_data
+            WHERE id IN (${placeholders})
+              AND geo IS NOT NULL
+              AND geo != ''
+            `,
+            campaignIds
+          );
 
-        campaign_ids: campaignIds,
+          geos = geoRows.map((item) => item.geo);
+        }
 
-        total_campaign_ids: campaignIds.length,
-
-        os: row.os,
-
-        created_at: row.created_at,
-
-        updated_at: row.updated_at,
-      }));
-    });
+        return campaignNames.map((campaignName) => ({
+          config_id: row.id,
+          campaign_name: campaignName,
+          campaign_ids: campaignIds,
+          total_campaign_ids: campaignIds.length,
+          geos, // <-- Added
+          os: row.os,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        }));
+      })
+    );
 
     return res.json({
       success: true,
-      count: formatted.length,
-      data: formatted,
+      count: formatted.flat().length,
+      data: formatted.flat(),
     });
   } catch (err) {
     console.error("getConfiguredCampaigns error:", err);
@@ -357,5 +433,3 @@ exports.getConfiguredCampaigns = async (req, res) => {
     });
   }
 };
-
-

@@ -171,7 +171,7 @@ async function fetchMetricsAllWindows(
       cm.pubam,
       cm.pubid,
       cm.pid,
-      MAX(cm.is_paused) AS is_paused,
+      MIN(cm.is_paused) AS is_paused,
       SUM(cm.impressions) AS total_impressions,
       /* MTD */
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
@@ -228,12 +228,6 @@ async function fetchMetricsAllWindows(
         )
       )
 
-      AND DATE(COALESCE(
-        cm.install_time,
-        cm.event_time,
-        cm.clicks_date,
-        cm.metrics_date
-      )) BETWEEN ? AND ?
 
     GROUP BY cm.pubam, cm.pubid, cm.pid, cm.os,cm.campaign_id
   `;
@@ -275,9 +269,6 @@ async function fetchMetricsAllWindows(
 
     ...campaign_ids,
     ...geo,
-
-    mtd.start,
-    mtd.end,
   ];
 
   const [rows] = await db.execute(sql, params);
@@ -433,13 +424,6 @@ async function fetchEventMetricsAllWindows(
 
       AND cem.event_name IN (${evPlaceholders})
 
-      AND DATE(COALESCE(
-        cm.install_time,
-        cm.event_time,
-        cm.clicks_date,
-        cm.metrics_date
-      )) BETWEEN ? AND ?
-
     GROUP BY cm.campaign_id, cm.pid, cm.os, cem.event_name, cem.event_type
   `;
 
@@ -458,9 +442,6 @@ async function fetchEventMetricsAllWindows(
     ...geo,
 
     ...eventNames,
-
-    mtd.start,
-    mtd.end,
   ];
 
   const [rows] = await db.execute(sql, params);
@@ -550,15 +531,94 @@ async function getCampaignAnalytics(payload) {
   }
 
   // ── Step 5 → 8: Per-PID assembly ────────────────────────────────────────
-  const result = metricsRows.map((row) => {
+  // const result = metricsRows.map((row) => {
+  //   const pid = row.pid;
+  //   const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
+  //   // Build aggregation objects per window
+  //   const buildAgg = (prefix) => ({
+  //     clicks: row[`${prefix}_clicks`],
+  //     installs: row[`${prefix}_installs`],
+  //     rti: row[`${prefix}_rti`],
+  //     pi: row[`${prefix}_pi`],
+  //     events: buildEventAgg(eventMap, eventMap_db[pidKey], prefix),
+  //   });
+
+  //   const aggMtd = buildAgg("mtd");
+  //   const aggPrimary = buildAgg("primary");
+  //   const aggSecondary = buildAgg("secondary");
+
+  //   // KPI computation
+  //   const kpiMtd = computeKPIs(aggMtd, eventKeys);
+  //   const kpiPrimary = computeKPIs(aggPrimary, eventKeys);
+  //   const kpiSecondary = computeKPIs(aggSecondary, eventKeys);
+
+  //   // Color application
+  //   const coloredMtd = applyColors(kpiMtd, rule1, rule2, eventKeys,pid);
+  //   const coloredPrimary = applyColors(kpiPrimary, rule1, rule2, eventKeys,pid);
+  //   const coloredSecondary = applyColors(kpiSecondary, rule1, rule2, eventKeys,pid);
+  //   // PID classification (based on MTD traffic)
+  //   const pidColor = classifyPID(
+  //     {
+  //       pubam: row.pubam,
+  //       pubid: row.pubid,
+  //       is_paused: row.is_paused,
+  //       mtd_clicks: row.mtd_clicks,
+  //       mtd_installs: row.mtd_installs,
+  //     },
+  //     clicks_per_day,
+  //     installs_per_day,
+  //     windows.mtd.days,
+  //   );
+
+  //   // Flatten into frontend-ready row
+  //   return flattenRow({
+  //     pid,
+  //     pubid: row.pubid,
+  //     pubam: row.pubam,
+  //     pid_color: pidColor,
+  //     total_impressions: row.total_impressions,
+  //     mtd: coloredMtd,
+  //     primary: coloredPrimary,
+  //     secondary: coloredSecondary,
+  //     eventKeys,
+  //     primaryLabel: windows.primary.label,
+  //     secondaryLabel: windows.secondary.label,
+  //   });
+  // });
+  const filteredRows = metricsRows.filter((row) => {
+    const hasData =
+      Number(row.mtd_clicks || 0) > 0 ||
+      Number(row.mtd_installs || 0) > 0 ||
+      Number(row.mtd_rti || 0) > 0 ||
+      Number(row.mtd_pi || 0) > 0 ||
+      Number(row.primary_clicks || 0) > 0 ||
+      Number(row.primary_installs || 0) > 0 ||
+      Number(row.primary_rti || 0) > 0 ||
+      Number(row.primary_pi || 0) > 0 ||
+      Number(row.secondary_clicks || 0) > 0 ||
+      Number(row.secondary_installs || 0) > 0 ||
+      Number(row.secondary_rti || 0) > 0 ||
+      Number(row.secondary_pi || 0) > 0;
+
+    // Live PID -> always show even if all values are 0
+    if (Number(row.is_paused) === 0) {
+      return true;
+    }
+
+    // Paused PID -> show only if data exists
+    return hasData;
+  });
+
+  const result = filteredRows.map((row) => {
     const pid = row.pid;
     const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
+
     // Build aggregation objects per window
     const buildAgg = (prefix) => ({
-      clicks: row[`${prefix}_clicks`],
-      installs: row[`${prefix}_installs`],
-      rti: row[`${prefix}_rti`],
-      pi: row[`${prefix}_pi`],
+      clicks: row[`${prefix}_clicks`] || 0,
+      installs: row[`${prefix}_installs`] || 0,
+      rti: row[`${prefix}_rti`] || 0,
+      pi: row[`${prefix}_pi`] || 0,
       events: buildEventAgg(eventMap, eventMap_db[pidKey], prefix),
     });
 
@@ -572,30 +632,44 @@ async function getCampaignAnalytics(payload) {
     const kpiSecondary = computeKPIs(aggSecondary, eventKeys);
 
     // Color application
-    const coloredMtd = applyColors(kpiMtd, rule1, rule2, eventKeys);
-    const coloredPrimary = applyColors(kpiPrimary, rule1, rule2, eventKeys);
-    const coloredSecondary = applyColors(kpiSecondary, rule1, rule2, eventKeys);
-    // PID classification (based on MTD traffic)
+    const coloredMtd = applyColors(kpiMtd, rule1, rule2, eventKeys, pid);
+
+    const coloredPrimary = applyColors(
+      kpiPrimary,
+      rule1,
+      rule2,
+      eventKeys,
+      pid,
+    );
+
+    const coloredSecondary = applyColors(
+      kpiSecondary,
+      rule1,
+      rule2,
+      eventKeys,
+      pid,
+    );
+
+    // PID classification
     const pidColor = classifyPID(
       {
         pubam: row.pubam,
         pubid: row.pubid,
         is_paused: row.is_paused,
-        mtd_clicks: row.mtd_clicks,
-        mtd_installs: row.mtd_installs,
+        mtd_clicks: row.mtd_clicks || 0,
+        mtd_installs: row.mtd_installs || 0,
       },
       clicks_per_day,
       installs_per_day,
       windows.mtd.days,
     );
 
-    // Flatten into frontend-ready row
     return flattenRow({
       pid,
       pubid: row.pubid,
       pubam: row.pubam,
       pid_color: pidColor,
-      total_impressions: row.total_impressions,
+      total_impressions: row.total_impressions || 0,
       mtd: coloredMtd,
       primary: coloredPrimary,
       secondary: coloredSecondary,
@@ -604,7 +678,6 @@ async function getCampaignAnalytics(payload) {
       secondaryLabel: windows.secondary.label,
     });
   });
-
   return {
     data: result,
     meta: {

@@ -13,21 +13,46 @@
  */
 const COLOR_PRIORITY = ["green", "yellow", "orange", "red"];
 
-function getColor(value, colorRules) {
+function getColor(value, colorRules, pid) {
   if (value === null || value === undefined || !colorRules) return null;
+
+  const numericValue = Number(value);
 
   for (const color of COLOR_PRIORITY) {
     const ranges = colorRules[color];
     if (!ranges) continue;
 
     for (const rangeKey of Object.keys(ranges)) {
-      const { min, max } = ranges[rangeKey];
-      if (value >= min && value <= max) {
+      const min = Number(ranges[rangeKey].min);
+      const max = Number(ranges[rangeKey].max);
+
+      if (pid === "hanahnehu_int") {
+        console.log("COLOR CHECK", {
+          pid,
+          value: numericValue,
+          color,
+          rangeKey,
+          min,
+          max,
+          matched: numericValue >= min && numericValue <= max,
+        });
+      }
+
+      if (numericValue >= min && numericValue <= max) {
         return color;
       }
     }
   }
-  return null; // no match
+
+  if (pid === "hanahnehu_int") {
+    console.log("NO COLOR MATCH", {
+      pid,
+      value: numericValue,
+      colorRules,
+    });
+  }
+
+  return null;
 }
 
 /**
@@ -57,18 +82,19 @@ const KPI_TO_RULE2_KEY = {
  * @param {string[]} eventKeys  - ['E1','E2']
  * @returns {object}            - colored KPI map
  */
-function applyColors(kpis, rule1, rule2, eventKeys) {
+function applyColors(kpis, rule1, rule2, eventKeys, pid) {
   const result = {};
 
   // c2i uses rule1 → CTI
-  result.c2i = withColor(kpis.c2i, rule1?.["CTI"]);
+  result.c2i = withColor(kpis.c2i, rule1?.["CTI"], pid);
 
   // fraud KPIs use rule2
-  result.rt_install = withColor(kpis.rt_install, rule2?.["RI"]);
-  result.pa_install = withColor(kpis.pa_install, rule2?.["PI"]);
+  result.rt_install = withColor(kpis.rt_install, rule2?.["RI"], pid);
+  result.pa_install = withColor(kpis.pa_install, rule2?.["PI"], pid);
   result.install_fraud = withColor(
     kpis.install_fraud,
     rule2?.["Total Install Fraud"],
+    pid,
   );
 
   // raw counts (no color)
@@ -85,25 +111,35 @@ function applyColors(kpis, rule1, rule2, eventKeys) {
     result[`cr_${eKey}`] = withColor(
       kpis[`cr_${eKey}`],
       rule1?.[`ITE${ruleKeyIdx}`],
+      pid,
     );
 
     // percentage color
-    result[`pa_${eKey}`] = withColor(kpis[`pa_${eKey}`], rule2?.[`PA ${eKey}`]);
+    result[`pa_${eKey}`] = withColor(
+      kpis[`pa_${eKey}`],
+      rule2?.[`PA ${eKey}`],
+      pid,
+    );
 
     // pae count
-    result[`pae_${eKey}`] = withColor(
-      kpis[`pae_${eKey}`],
-      rule2?.[`PA ${eKey}`],
-    );
+    result[`pae_${eKey}`] = {
+      value: kpis[`pae_${eKey}`],
+      color: getColor(
+        kpis[`pa_${eKey}`], // percentage
+        rule2?.[`PA ${eKey}`],
+        pid,
+      ),
+    };
   });
-
   return result;
 }
 
-function withColor(value, colorRules) {
+function withColor(value, colorRules, pid) {
+  const color = getColor(value, colorRules, pid);
+
   return {
     value: value ?? 0,
-    color: getColor(value, colorRules),
+    color,
   };
 }
 
