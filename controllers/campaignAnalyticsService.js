@@ -531,62 +531,33 @@ async function getCampaignAnalytics(payload) {
   }
 
   // ── Step 5 → 8: Per-PID assembly ────────────────────────────────────────
-  // const result = metricsRows.map((row) => {
-  //   const pid = row.pid;
-  //   const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
-  //   // Build aggregation objects per window
-  //   const buildAgg = (prefix) => ({
-  //     clicks: row[`${prefix}_clicks`],
-  //     installs: row[`${prefix}_installs`],
-  //     rti: row[`${prefix}_rti`],
-  //     pi: row[`${prefix}_pi`],
-  //     events: buildEventAgg(eventMap, eventMap_db[pidKey], prefix),
-  //   });
+  // const filteredRows = metricsRows.filter((row) => {
+  //   const hasData =
+  //     Number(row.mtd_clicks || 0) > 0 ||
+  //     Number(row.mtd_installs || 0) > 0 ||
+  //     Number(row.mtd_rti || 0) > 0 ||
+  //     Number(row.mtd_pi || 0) > 0 ||
+  //     Number(row.primary_clicks || 0) > 0 ||
+  //     Number(row.primary_installs || 0) > 0 ||
+  //     Number(row.primary_rti || 0) > 0 ||
+  //     Number(row.primary_pi || 0) > 0 ||
+  //     Number(row.secondary_clicks || 0) > 0 ||
+  //     Number(row.secondary_installs || 0) > 0 ||
+  //     Number(row.secondary_rti || 0) > 0 ||
+  //     Number(row.secondary_pi || 0) > 0;
 
-  //   const aggMtd = buildAgg("mtd");
-  //   const aggPrimary = buildAgg("primary");
-  //   const aggSecondary = buildAgg("secondary");
+  //   // Live PID -> always show even if all values are 0
+  //   if (Number(row.is_paused) === 0) {
+  //     return true;
+  //   }
 
-  //   // KPI computation
-  //   const kpiMtd = computeKPIs(aggMtd, eventKeys);
-  //   const kpiPrimary = computeKPIs(aggPrimary, eventKeys);
-  //   const kpiSecondary = computeKPIs(aggSecondary, eventKeys);
-
-  //   // Color application
-  //   const coloredMtd = applyColors(kpiMtd, rule1, rule2, eventKeys,pid);
-  //   const coloredPrimary = applyColors(kpiPrimary, rule1, rule2, eventKeys,pid);
-  //   const coloredSecondary = applyColors(kpiSecondary, rule1, rule2, eventKeys,pid);
-  //   // PID classification (based on MTD traffic)
-  //   const pidColor = classifyPID(
-  //     {
-  //       pubam: row.pubam,
-  //       pubid: row.pubid,
-  //       is_paused: row.is_paused,
-  //       mtd_clicks: row.mtd_clicks,
-  //       mtd_installs: row.mtd_installs,
-  //     },
-  //     clicks_per_day,
-  //     installs_per_day,
-  //     windows.mtd.days,
-  //   );
-
-  //   // Flatten into frontend-ready row
-  //   return flattenRow({
-  //     pid,
-  //     pubid: row.pubid,
-  //     pubam: row.pubam,
-  //     pid_color: pidColor,
-  //     total_impressions: row.total_impressions,
-  //     mtd: coloredMtd,
-  //     primary: coloredPrimary,
-  //     secondary: coloredSecondary,
-  //     eventKeys,
-  //     primaryLabel: windows.primary.label,
-  //     secondaryLabel: windows.secondary.label,
-  //   });
+  //   // Paused PID -> show only if data exists
+  //   return hasData;
   // });
   const filteredRows = metricsRows.filter((row) => {
-    const hasData =
+    const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
+
+    const hasMetricData =
       Number(row.mtd_clicks || 0) > 0 ||
       Number(row.mtd_installs || 0) > 0 ||
       Number(row.mtd_rti || 0) > 0 ||
@@ -600,15 +571,20 @@ async function getCampaignAnalytics(payload) {
       Number(row.secondary_rti || 0) > 0 ||
       Number(row.secondary_pi || 0) > 0;
 
-    // Live PID -> always show even if all values are 0
+    const hasEventData =
+      eventMap_db[pidKey] &&
+      Object.values(eventMap_db[pidKey]).some((event) =>
+        ["mtd", "primary", "secondary"].some(
+          (win) => (event[win]?.noe || 0) > 0 || (event[win]?.pe || 0) > 0,
+        ),
+      );
+
     if (Number(row.is_paused) === 0) {
       return true;
     }
 
-    // Paused PID -> show only if data exists
-    return hasData;
+    return hasMetricData || hasEventData;
   });
-
   const result = filteredRows.map((row) => {
     const pid = row.pid;
     const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
