@@ -10,7 +10,7 @@ exports.getAdvertiserAccount = async (req, res) => {
     assigned_subadmins,
     month,
   });
-
+  console.log("Assigned sub-admins: accounts", assigned_subadmins);
   try {
     let totals = [];
 
@@ -129,17 +129,23 @@ exports.getAdvertiserAccount = async (req, res) => {
 
       const [result] = await pool.query(
         `
-        SELECT 
-          aa.*,
-          ad.adv_name,
-          ad.note
-          FROM advertiser_account aa
-          LEFT JOIN advids ad ON aa.adv_id = ad.adv_id
-        WHERE ad.user_id IN (?)
-        ${month ? "AND aa.month = ?" : ""}
-        ORDER BY aa.month DESC
-      `,
-        month ? [allowedUsers, month] : [allowedUsers],
+  SELECT
+    aa.*,
+    ad.adv_name,
+    ad.note
+  FROM advertiser_account aa
+  LEFT JOIN advids ad
+    ON aa.adv_id = ad.adv_id
+  WHERE (
+    ad.user_id IN (?)
+    OR ad.assign_id IN (?)
+  )
+  ${month ? "AND aa.month = ?" : ""}
+  ORDER BY aa.month DESC
+  `,
+        month
+          ? [allowedUsers, allowedUsers, month]
+          : [allowedUsers, allowedUsers],
       );
 
       finalData = result;
@@ -202,32 +208,32 @@ exports.createManualAdvertiserAccount = async (req, res) => {
       });
     }
 
-  //   // Check existing record
-  //   const [existing] = await pool.query(
-  //     `
-  // SELECT id
-  // FROM advertiser_account
-  // WHERE adv_id = ?
-  //   AND month = ?
-  //   AND is_manual = 1
-  // `,
-  //     [adv_id, month],
-  //   );
+    //   // Check existing record
+    //   const [existing] = await pool.query(
+    //     `
+    // SELECT id
+    // FROM advertiser_account
+    // WHERE adv_id = ?
+    //   AND month = ?
+    //   AND is_manual = 1
+    // `,
+    //     [adv_id, month],
+    //   );
 
-  //   if (existing.length) {
-  //     return res.status(400).json({
-  //       success: false,
-  //       message: "Manual record already exists",
-  //     });
-  //   }
+    //   if (existing.length) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Manual record already exists",
+    //     });
+    //   }
 
-  //   console.log("EXISTING:", existing);
-  //   if (existing.length) {
-  //     return res.status(400).json({
-  //       success: false,
-  //       message: "Record already exists for this advertiser and month",
-  //     });
-  //   }
+    //   console.log("EXISTING:", existing);
+    //   if (existing.length) {
+    //     return res.status(400).json({
+    //       success: false,
+    //       message: "Record already exists for this advertiser and month",
+    //     });
+    //   }
 
     await pool.query(
       `
