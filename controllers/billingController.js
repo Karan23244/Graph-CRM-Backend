@@ -5,8 +5,7 @@ const { normalizeRole, getSubAdminIds } = require("../helpers/billinghelpers");
 ===================================================== */
 exports.getBillingDropdowns = async (req, res) => {
   try {
-    let { roles, user_id } = req.body;
-    console.log("Billing Dropdown Request:", { roles, user_id });
+    let { roles, user_id,assigned_to } = req.body;
     // Ensure roles is always an array
     if (!Array.isArray(roles)) {
       roles = [roles];
@@ -20,8 +19,10 @@ exports.getBillingDropdowns = async (req, res) => {
     const isAdmin = roles.includes("admin");
     const isPublisherManager = roles.includes("publisher_manager");
     const isAdvertiserManager = roles.includes("advertiser_manager");
-    const isPublisher = roles.includes("publisher");
-    const isAdvertiser = roles.includes("advertiser");
+    const isPublisher =
+      roles.includes("publisher") || roles.includes("pub_executive");
+    const isAdvertiser =
+      roles.includes("advertiser") || roles.includes("adv_executive"); // Treat 'client' as 'advertiser'
 
     /**
      * =====================
@@ -52,7 +53,8 @@ exports.getBillingDropdowns = async (req, res) => {
 
     if (isPublisherManager || isAdvertiserManager) {
       const subAdmins = await getSubAdminIds(user_id);
-      userIds = [user_id, ...subAdmins];
+      console.log("Sub-admins for user_id", user_id, ":", subAdmins);
+      userIds = [user_id, ...assigned_to];
     }
 
     /**
@@ -530,4 +532,3 @@ ORDER BY campaign_key;
     res.status(500).json({ message: "Server error" });
   }
 };
-
