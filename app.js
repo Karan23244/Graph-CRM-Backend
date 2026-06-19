@@ -46,14 +46,14 @@ const io = new Server(server, {
 
 // ✅ Attach `io` to the app BEFORE routes
 app.set("io", io);
-app.use(cors());
-app.use(express.json());
+// app.use(cors());
+// app.use(express.json());
 
 //  ^|^e CORS FIRST
 
 //  ^|^e Increase body size limit
-app.use(express.json({ limit: "500mb" }));
-app.use(express.urlencoded({ limit: "500mb", extended: true }));
+app.use(express.json({ limit: "2gb" }));
+app.use(express.urlencoded({ limit: "2gb", extended: true }));
 
 //  ^|^e Routes
 app.use("/api", uploadRoutes);
@@ -1049,6 +1049,12 @@ app.get("/api/recentpid", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 2001;
+
+// Allow very large uploads
+server.timeout = 0;
+server.requestTimeout = 0;
+server.headersTimeout = 0;
+server.keepAliveTimeout = 0;
 
 (async () => {
   await initializeDecisionMatrix();
