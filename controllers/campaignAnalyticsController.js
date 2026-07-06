@@ -4,7 +4,6 @@ const analyticsService = require("./campaignAnalyticsService");
 
 exports.getCampaignAnalytics = async (req, res) => {
   try {
-    console.log("REQ BODY:", req.body);
 
     const result = await analyticsService.getCampaignAnalytics(req.body);
 
@@ -191,14 +190,6 @@ exports.deleteCampaignData = async (req, res) => {
     start_date,
     end_date,
   } = req.body;
-  console.log("Delete Campaign Data Request:", {
-    campaign_name,
-    campaign_ids,
-    geo,
-    os,
-    start_date,
-    end_date,
-  });
   const connection = await db.getConnection();
 
   try {

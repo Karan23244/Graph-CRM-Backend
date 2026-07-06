@@ -23,18 +23,6 @@
 
 function classifyPID(row, clicksPerDay, installsPerDay) {
   const { pubam, pubid, is_paused } = row;
-  if (row.pid === "atmobi_int") {
-    console.log("PID DEBUG", {
-      pid: row.pid,
-      pubam: row.pubam,
-      pubid: row.pubid,
-      mtd_clicks: row.mtd_clicks,
-      mtd_installs: row.mtd_installs,
-      clicks_mtd: row.clicks_mtd,
-      installs_mtd: row.installs_mtd,
-      is_paused: row.is_paused,
-    });
-  }
   // Missing Data → Black
   const invalidValues = [null, undefined, "", "N/A"];
 

@@ -6,6 +6,9 @@ const {
   lockPublisherBilling,
   verifyPublisherBillingRow,
   listPublisherBilling,
+  verifyAllPublisherBillingRows,
+  getPublisherMonthRevenue,
+  holdPublisherPid,
 } = require("../controllers/publisherBillingController");
 const router = express.Router();
 
@@ -15,6 +18,7 @@ router.post("/publisher-verify-pid", savePublisherBilling);
 router.post("/publisher-lock", lockPublisherBilling);
 router.post("/publisher-verify-row", verifyPublisherBillingRow);
 router.post("/publisher", listPublisherBilling);
-
+router.post("/publisher/publisher-verify-all", verifyAllPublisherBillingRows);
+router.post("/publisher-month-revenue", getPublisherMonthRevenue);
+router.post("/publisher/hold-pid", holdPublisherPid);
 module.exports = router;
-

@@ -1,5 +1,5 @@
 "use strict";
-
+const PROVIDERS = require("./providerDefinitions");
 /**
  * Given a numeric value and a color-rules object like:
  * {
@@ -44,14 +44,6 @@ function getColor(value, colorRules, pid) {
     }
   }
 
-  if (pid === "hanahnehu_int") {
-    console.log("NO COLOR MATCH", {
-      pid,
-      value: numericValue,
-      colorRules,
-    });
-  }
-
   return null;
 }
 
@@ -82,21 +74,22 @@ const KPI_TO_RULE2_KEY = {
  * @param {string[]} eventKeys  - ['E1','E2']
  * @returns {object}            - colored KPI map
  */
-function applyColors(kpis, rule1, rule2, eventKeys, pid) {
+function applyColors(kpis, rule1, rule2, eventKeys, pid, provider) {
   const result = {};
 
   // c2i uses rule1 → CTI
   result.c2i = withColor(kpis.c2i, rule1?.["CTI"], pid);
 
   // fraud KPIs use rule2
-  result.rt_install = withColor(kpis.rt_install, rule2?.["RI"], pid);
-  result.pa_install = withColor(kpis.pa_install, rule2?.["PI"], pid);
-  result.install_fraud = withColor(
-    kpis.install_fraud,
-    rule2?.["Total Install Fraud"],
-    pid,
-  );
-
+  if (PROVIDERS[provider]?.supportsFraud) {
+    result.rt_install = withColor(kpis.rt_install, rule2?.["RI"], pid);
+    result.pa_install = withColor(kpis.pa_install, rule2?.["PI"], pid);
+    result.install_fraud = withColor(
+      kpis.install_fraud,
+      rule2?.["Total Install Fraud"],
+      pid,
+    );
+  }
   // raw counts (no color)
   result.clicks = kpis.clicks;
   result.installs = kpis.installs;
@@ -113,23 +106,24 @@ function applyColors(kpis, rule1, rule2, eventKeys, pid) {
       rule1?.[`ITE${ruleKeyIdx}`],
       pid,
     );
-
-    // percentage color
-    result[`pa_${eKey}`] = withColor(
-      kpis[`pa_${eKey}`],
-      rule2?.[`PA ${eKey}`],
-      pid,
-    );
-
-    // pae count
-    result[`pae_${eKey}`] = {
-      value: kpis[`pae_${eKey}`],
-      color: getColor(
-        kpis[`pa_${eKey}`], // percentage
+    if (PROVIDERS[provider]?.supportsPaidEvents) {
+      // percentage color
+      result[`pa_${eKey}`] = withColor(
+        kpis[`pa_${eKey}`],
         rule2?.[`PA ${eKey}`],
         pid,
-      ),
-    };
+      );
+
+      // pae count
+      result[`pae_${eKey}`] = {
+        value: kpis[`pae_${eKey}`],
+        color: getColor(
+          kpis[`pa_${eKey}`], // percentage
+          rule2?.[`PA ${eKey}`],
+          pid,
+        ),
+      };
+    }
   });
   return result;
 }

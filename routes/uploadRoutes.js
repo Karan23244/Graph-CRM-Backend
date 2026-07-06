@@ -14,7 +14,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 1024 * 1024 * 1024, // 1 GB per file
+    fileSize: 2 * 1024 * 1024 * 1024, // 2 GB per file
     files: 10, // allow up to 10 files
   },
 });
@@ -22,7 +22,7 @@ const upload = multer({
 router.post(
   "/metrics",
   upload.fields([{ name: "files", maxCount: 10 }]),
-  handleUpload
+  handleUpload,
 );
 
 module.exports = router;

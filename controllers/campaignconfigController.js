@@ -35,6 +35,7 @@ exports.getCampaignList = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.createCampaignConfig = async (req, res) => {
   const {
+    config_type,
     campaign_ids,
     campaign_names,
     os,
@@ -75,6 +76,7 @@ exports.createCampaignConfig = async (req, res) => {
         (
           campaign_id,
           campaign_name,
+          config_type,
           os,
           clicks_per_day,
           installs_per_day,
@@ -85,10 +87,11 @@ exports.createCampaignConfig = async (req, res) => {
           created_at,
           updated_at
         )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?,?, NOW(), NOW())`,
+       VALUES (?, ?,?, ?, ?, ?, ?, ?, ?,?, NOW(), NOW())`,
       [
         JSON.stringify(campaign_ids),
         JSON.stringify(campaign_names),
+        config_type || "appsflyer",
         os,
         clicks_per_day,
         installs_per_day,
@@ -116,77 +119,9 @@ exports.createCampaignConfig = async (req, res) => {
 // GET /campaign-config/:id
 // Fetch existing config by campaign_id
 // ─────────────────────────────────────────────────────────────────────────────
-// exports.getCampaignConfig = async (req, res) => {
-//   const { id } = req.params;
-
-//   console.log("Fetching config for campaign ID:", id);
-
-//   try {
-//     const [rows] = await db.query(`SELECT * FROM campaign_configs`);
-
-//     console.log(`Total configs in DB: ${rows.length}`);
-
-//     const config = rows.find((row) => {
-//       let parsed;
-
-//       try {
-//         parsed = JSON.parse(row.campaign_id || "[]");
-//       } catch {
-//         parsed = row.campaign_id;
-//       }
-
-//       const ids = Array.isArray(parsed) ? parsed : [parsed];
-
-//       return ids.map(String).includes(String(id));
-//     });
-
-//     if (!config) {
-//       return res.status(404).json({
-//         message: "Config not found",
-//       });
-//     }
-
-//     console.log("Config found:", config);
-
-//     return res.json({
-//       ...config,
-
-//       campaign_ids: (() => {
-//         try {
-//           return JSON.parse(config.campaign_id || "[]");
-//         } catch {
-//           return [config.campaign_id];
-//         }
-//       })(),
-
-//       campaign_names: (() => {
-//         try {
-//           return JSON.parse(config.campaign_name || "[]");
-//         } catch {
-//           return [config.campaign_name];
-//         }
-//       })(),
-
-//       events: JSON.parse(config.events || "[]"),
-
-//       rule1_params: JSON.parse(config.rule1_params || "{}"),
-
-//       rule2_params: JSON.parse(config.rule2_params || "{}"),
-
-//       ignore_metrics: JSON.parse(config.ignore_metrics || "[]"),
-//     });
-//   } catch (err) {
-//     console.error("getCampaignConfig error:", err);
-
-//     return res.status(500).json({
-//       message: "Failed to fetch config",
-//     });
-//   }
-// };
 // POST /campaign-config/find
 exports.getCampaignConfig = async (req, res) => {
   const { campaign_ids } = req.body;
-  console.log("Fetching config for campaign IDs:", campaign_ids);
   try {
     const [rows] = await db.query(`SELECT * FROM campaign_configs`);
 
@@ -214,7 +149,7 @@ exports.getCampaignConfig = async (req, res) => {
 
     return res.json({
       ...config,
-
+      config_type: config.config_type || "appsflyer",
       campaign_ids: JSON.parse(config.campaign_id || "[]"),
 
       campaign_names: JSON.parse(config.campaign_name || "[]"),
@@ -243,6 +178,7 @@ exports.updateCampaignConfig = async (req, res) => {
   const { id } = req.params;
 
   const {
+    config_type,
     campaign_ids,
     campaign_names,
     clicks_per_day,
@@ -258,6 +194,7 @@ exports.updateCampaignConfig = async (req, res) => {
       `UPDATE campaign_configs
        SET campaign_id = ?,
            campaign_name = ?,
+           config_type = ?,
            clicks_per_day = ?,
            installs_per_day = ?,
            events = ?,
@@ -269,6 +206,7 @@ exports.updateCampaignConfig = async (req, res) => {
       [
         JSON.stringify(campaign_ids),
         JSON.stringify(campaign_names),
+        config_type,
         clicks_per_day,
         installs_per_day,
         JSON.stringify(events),
@@ -297,67 +235,6 @@ exports.updateCampaignConfig = async (req, res) => {
   }
 };
 
-// exports.getConfiguredCampaigns = async (req, res) => {
-//   try {
-//     const [rows] = await db.query(`
-//       SELECT
-//         id,
-//         campaign_id,
-//         campaign_name,
-//         os,
-//         created_at,
-//         updated_at
-//       FROM campaign_configs
-//       ORDER BY updated_at DESC
-//     `);
-
-//     const safeParseArray = (value) => {
-//       try {
-//         const parsed = JSON.parse(value);
-
-//         return Array.isArray(parsed) ? parsed : [parsed];
-//       } catch {
-//         return value ? [value] : [];
-//       }
-//     };
-
-//     const formatted = rows.flatMap((row) => {
-//       const campaignIds = safeParseArray(row.campaign_id);
-
-//       const campaignNames = [...new Set(safeParseArray(row.campaign_name))];
-
-//       return campaignNames.map((campaignName) => ({
-//         config_id: row.id,
-
-//         campaign_name: campaignName,
-
-//         campaign_ids: campaignIds,
-
-//         total_campaign_ids: campaignIds.length,
-
-//         os: row.os,
-
-//         created_at: row.created_at,
-
-//         updated_at: row.updated_at,
-//       }));
-//     });
-
-//     return res.json({
-//       success: true,
-//       count: formatted.length,
-//       data: formatted,
-//     });
-//   } catch (err) {
-//     console.error("getConfiguredCampaigns error:", err);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch configured campaigns",
-//     });
-//   }
-// };
-
 exports.getConfiguredCampaigns = async (req, res) => {
   try {
     const [rows] = await db.query(`
@@ -365,6 +242,7 @@ exports.getConfiguredCampaigns = async (req, res) => {
         id,
         campaign_id,
         campaign_name,
+        config_type,
         os,
         created_at,
         updated_at
@@ -400,7 +278,7 @@ exports.getConfiguredCampaigns = async (req, res) => {
               AND geo IS NOT NULL
               AND geo != ''
             `,
-            campaignIds
+            campaignIds,
           );
 
           geos = geoRows.map((item) => item.geo);
@@ -416,7 +294,7 @@ exports.getConfiguredCampaigns = async (req, res) => {
           created_at: row.created_at,
           updated_at: row.updated_at,
         }));
-      })
+      }),
     );
 
     return res.json({

@@ -36,7 +36,7 @@ async function fetchCampaignConfig(campaignName, os) {
   cfg.rule1 = parse(cfg.rule1_params) || {};
   cfg.rule2 = parse(cfg.rule2_params) || {};
   cfg.ignore_arr = parse(cfg.ignore_metrics) || [];
-
+  cfg.config_type = cfg.config_type || "appsflyer";
   return cfg;
 }
 
@@ -59,95 +59,6 @@ function buildEventMap(eventsArr) {
 // 3. Fetch aggregated campaign_metrics for all windows in ONE query
 //    Uses CASE WHEN to pivot MTD / 7D / 3D in a single pass
 // ─────────────────────────────────────────────
-// async function fetchMetricsAllWindows(campaignName, os, windows) {
-//   const { mtd, primary, secondary } = windows;
-
-//   /*
-//    * Date filter uses COALESCE(install_time, event_time, clicks_date)
-//    * We cast it to DATE for comparison.
-//    */
-//   const sql = `
-//     SELECT
-//       cm.pubam,
-//       cm.pubid,
-//       cm.pid,
-//       MAX(cm.is_paused) AS is_paused,
-
-//       /* MTD aggregates */
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS mtd_clicks,
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS mtd_installs,
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS mtd_rti,
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS mtd_pi,
-
-//       /* Primary window (7D) */
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS primary_clicks,
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS primary_installs,
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS primary_rti,
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS primary_pi,
-
-//       /* Secondary window (3D) */
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.clicks   ELSE 0 END) AS secondary_clicks,
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.noi      ELSE 0 END) AS secondary_installs,
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.rti      ELSE 0 END) AS secondary_rti,
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cm.pi       ELSE 0 END) AS secondary_pi
-
-//     FROM campaign_metrics_new cm
-//     WHERE LOWER(cm.campaign_name) = LOWER(?)
-//       AND LOWER(cm.os) = LOWER(?)
-//       AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date)) BETWEEN ? AND ?
-
-// GROUP BY cm.pubam, cm.pubid, cm.pid, cm.os  `;
-
-//   const params = [
-//     // MTD (×4 columns)
-//     mtd.start,
-//     mtd.end,
-//     mtd.start,
-//     mtd.end,
-//     mtd.start,
-//     mtd.end,
-//     mtd.start,
-//     mtd.end,
-//     // Primary (×4)
-//     primary.start,
-//     primary.end,
-//     primary.start,
-//     primary.end,
-//     primary.start,
-//     primary.end,
-//     primary.start,
-//     primary.end,
-//     // Secondary (×4)
-//     secondary.start,
-//     secondary.end,
-//     secondary.start,
-//     secondary.end,
-//     secondary.start,
-//     secondary.end,
-//     secondary.start,
-//     secondary.end,
-//     // WHERE clause
-//     campaignName,
-//     os,
-//     mtd.start,
-//     mtd.end, // outer range = MTD (widest window)
-//   ];
-
-//   const [rows] = await db.execute(sql, params);
-//   return rows;
-// }
 async function fetchMetricsAllWindows(
   campaignName,
   os,
@@ -171,8 +82,14 @@ async function fetchMetricsAllWindows(
       cm.pubam,
       cm.pubid,
       cm.pid,
-      MIN(cm.is_paused) AS is_paused,
-      SUM(cm.impressions) AS total_impressions,
+     MAX(cm.is_paused) AS is_paused,
+SUM(
+  CASE
+    WHEN DATE(cm.metrics_date) BETWEEN ? AND ?
+    THEN cm.impressions
+    ELSE 0
+  END
+) AS total_impressions,
       /* MTD */
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.clicks ELSE 0 END) AS mtd_clicks,
@@ -233,6 +150,9 @@ async function fetchMetricsAllWindows(
   `;
 
   const params = [
+    // Impressions date range
+    mtd.start,
+    mtd.end,
     // MTD
     mtd.start,
     mtd.end,
@@ -279,93 +199,6 @@ async function fetchMetricsAllWindows(
 // 4. Fetch event metrics for all PIDs in ONE query
 //    Returns map: { pid → { windowLabel → { eventName → { noe, pe } } } }
 // ─────────────────────────────────────────────
-// async function fetchEventMetricsAllWindows(
-//   campaignName,
-//   os,
-//   windows,
-//   eventNames,
-// ) {
-//   if (!eventNames.length) return {};
-
-//   const { mtd, primary, secondary } = windows;
-
-//   // Build placeholders for event names
-//   const evPlaceholders = eventNames.map(() => "?").join(",");
-
-//   const sql = `
-//     SELECT
-//       cm.pid,
-//       cem.event_name,
-//       cem.event_type,
-
-//       /* MTD */
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS mtd_count,
-
-//       /* Primary */
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS primary_count,
-
-//       /* Secondary */
-//       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date))
-//                     BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS secondary_count
-
-//     FROM campaign_event_metrics_new cem
-//     INNER JOIN campaign_metrics_new cm ON cm.id = cem.campaign_metrics_id
-// WHERE LOWER(cm.campaign_name) = LOWER(?)
-//   AND LOWER(cm.os) = LOWER(?)
-//   AND cem.event_name IN (${evPlaceholders})
-//   AND DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date,cm.metrics_date)) BETWEEN ? AND ?
-
-//    GROUP BY cm.pid, cm.os, cem.event_name, cem.event_type
-//   `;
-
-//   const params = [
-//     mtd.start,
-//     mtd.end,
-//     primary.start,
-//     primary.end,
-//     secondary.start,
-//     secondary.end,
-//     campaignName,
-//     os,
-//     ...eventNames,
-//     mtd.start,
-//     mtd.end,
-//   ];
-
-//   const [rows] = await db.execute(sql, params);
-
-//   /*
-//    * Build nested map:
-//    * {
-//    *   "PID123": {
-//    *     "submit_success": { mtd_noe: 0, mtd_pe: 400, primary_noe: 0, ... },
-//    *     ...
-//    *   }
-//    * }
-//    */
-//   const map = {};
-//   for (const row of rows) {
-//     const pidKey = `${row.pid}_${os}`;
-//     const pid = row.pid;
-//     const ev = row.event_name;
-//     const type = row.event_type; // 'noe' or 'pe'
-
-//     if (!map[pidKey]) map[pidKey] = {};
-//     if (!map[pidKey][ev]) map[pidKey][ev] = {};
-
-//     for (const win of ["mtd", "primary", "secondary"]) {
-//       if (!map[pidKey][ev][win]) map[pidKey][ev][win] = { noe: 0, pe: 0 };
-//       if (type === "noe")
-//         map[pidKey][ev][win].noe += parseInt(row[`${win}_count`]) || 0;
-//       if (type === "pe")
-//         map[pidKey][ev][win].pe += parseInt(row[`${win}_count`]) || 0;
-//     }
-//   }
-
-//   return map;
-// }
 async function fetchEventMetricsAllWindows(
   campaignName,
   os,
@@ -466,7 +299,7 @@ async function fetchEventMetricsAllWindows(
         map[pidKey][ev][win] = { noe: 0, pe: 0 };
       }
 
-      if (type === "noe") {
+      if (type === "noe" || type === "event") {
         map[pidKey][ev][win].noe += parseInt(row[`${win}_count`]) || 0;
       }
 
@@ -491,7 +324,6 @@ async function getCampaignAnalytics(payload) {
     end_date,
     windows: rawWindows = {},
   } = payload;
-  console.log("Received payload:", payload);
   const primaryDays = parseInt(rawWindows.primary) || 7;
   const secondaryDays = parseInt(rawWindows.secondary) || 3;
   // ── Step 1: Config ───────────────────────────────────────────────────────
@@ -531,29 +363,6 @@ async function getCampaignAnalytics(payload) {
   }
 
   // ── Step 5 → 8: Per-PID assembly ────────────────────────────────────────
-  // const filteredRows = metricsRows.filter((row) => {
-  //   const hasData =
-  //     Number(row.mtd_clicks || 0) > 0 ||
-  //     Number(row.mtd_installs || 0) > 0 ||
-  //     Number(row.mtd_rti || 0) > 0 ||
-  //     Number(row.mtd_pi || 0) > 0 ||
-  //     Number(row.primary_clicks || 0) > 0 ||
-  //     Number(row.primary_installs || 0) > 0 ||
-  //     Number(row.primary_rti || 0) > 0 ||
-  //     Number(row.primary_pi || 0) > 0 ||
-  //     Number(row.secondary_clicks || 0) > 0 ||
-  //     Number(row.secondary_installs || 0) > 0 ||
-  //     Number(row.secondary_rti || 0) > 0 ||
-  //     Number(row.secondary_pi || 0) > 0;
-
-  //   // Live PID -> always show even if all values are 0
-  //   if (Number(row.is_paused) === 0) {
-  //     return true;
-  //   }
-
-  //   // Paused PID -> show only if data exists
-  //   return hasData;
-  // });
   const filteredRows = metricsRows.filter((row) => {
     const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
 
@@ -603,12 +412,23 @@ async function getCampaignAnalytics(payload) {
     const aggSecondary = buildAgg("secondary");
 
     // KPI computation
-    const kpiMtd = computeKPIs(aggMtd, eventKeys);
-    const kpiPrimary = computeKPIs(aggPrimary, eventKeys);
-    const kpiSecondary = computeKPIs(aggSecondary, eventKeys);
+    const kpiMtd = computeKPIs(aggMtd, eventKeys, config.config_type);
+    const kpiPrimary = computeKPIs(aggPrimary, eventKeys, config.config_type);
+    const kpiSecondary = computeKPIs(
+      aggSecondary,
+      eventKeys,
+      config.config_type,
+    );
 
     // Color application
-    const coloredMtd = applyColors(kpiMtd, rule1, rule2, eventKeys, pid);
+    const coloredMtd = applyColors(
+      kpiMtd,
+      rule1,
+      rule2,
+      eventKeys,
+      pid,
+      config.config_type,
+    );
 
     const coloredPrimary = applyColors(
       kpiPrimary,
@@ -616,6 +436,7 @@ async function getCampaignAnalytics(payload) {
       rule2,
       eventKeys,
       pid,
+      config.config_type,
     );
 
     const coloredSecondary = applyColors(
@@ -624,6 +445,7 @@ async function getCampaignAnalytics(payload) {
       rule2,
       eventKeys,
       pid,
+      config.config_type,
     );
 
     // PID classification
@@ -654,11 +476,53 @@ async function getCampaignAnalytics(payload) {
       secondaryLabel: windows.secondary.label,
     });
   });
+  // ── PID Summary (MTD) ─────────────────────────────
+  const pidSummary = {
+    total_pids: 0,
+    active_pids: 0,
+    paused_pids: 0,
+    na_pids: 0,
+  };
+
+  const uniquePids = new Set();
+  const activePids = new Set();
+  const pausedPids = new Set();
+  const naPids = new Set();
+
+  filteredRows.forEach((row) => {
+    const pid = (row.pid || "").toString().trim();
+
+    // unique key so same pid in different campaign/pub doesn't duplicate
+    const pidKey = `${row.campaign_id}_${pid}_${row.pubid}`;
+
+    uniquePids.add(pidKey);
+
+    // NA PID
+    if (!pid || pid.toUpperCase() === "N/A" || pid.toUpperCase() === "NA") {
+      naPids.add(pidKey);
+    }
+
+    // paused pid
+    if (Number(row.is_paused) === 1) {
+      pausedPids.add(pidKey);
+    } else {
+      activePids.add(pidKey);
+    }
+  });
+
+  pidSummary.total_pids = uniquePids.size;
+  pidSummary.active_pids = activePids.size;
+  pidSummary.paused_pids = pausedPids.size;
+  pidSummary.na_pids = naPids.size;
   return {
     data: result,
     meta: {
+      pid_summary: pidSummary, // <-- add this
       windows: {
-        mtd: { start: windows.mtd.start, end: windows.mtd.end },
+        mtd: {
+          start: windows.mtd.start,
+          end: windows.mtd.end,
+        },
         primary: {
           start: windows.primary.start,
           end: windows.primary.end,
@@ -700,31 +564,6 @@ function buildEventAgg(eventMap, pidEvents = {}, windowPrefix) {
  *
  * Raw counts (clicks, installs) are stored directly as clicks_mtd etc.
  */
-// function flattenRow({
-//   pid, pubid, pubam, pid_color,
-//   mtd, primary, secondary,
-//   eventKeys,
-//   primaryLabel, secondaryLabel,
-// }) {
-//   const row = { pid, pubid, pubam, pid_color };
-
-//   const attach = (data, suffix) => {
-//     for (const [key, val] of Object.entries(data)) {
-//       if (typeof val === 'object' && val !== null && 'value' in val) {
-//         row[`${key}_${suffix}`] = val.value;
-//         row[`${key}_${suffix}_color`] = val.color;
-//       } else {
-//         row[`${key}_${suffix}`] = val;
-//       }
-//     }
-//   };
-
-//   attach(mtd,       'mtd');
-//   attach(primary,   primaryLabel);
-//   attach(secondary, secondaryLabel);
-
-//   return row;
-// }
 
 function flattenRow({
   pid,
@@ -754,41 +593,6 @@ function flattenRow({
 
     return `${count} (${percentage}%)`;
   };
-
-  // const attach = (data, suffix) => {
-  //   const installs = getValue(data.installs);
-  //   const clicks = getValue(data.clicks);
-
-  //   // IMPORTANT:
-  //   // rt_install & pa_install values already store percentages
-  //   // so we only need count + existing %
-
-  //   const rtiPercent = getValue(data.rt_install);
-  //   const paPercent = getValue(data.pa_install);
-  //   const fraudPercent = getValue(data.install_fraud);
-
-  //   const rtiCount = Math.round((rtiPercent * installs) / 100);
-  //   const paCount = Math.round((paPercent * installs) / 100);
-
-  //   row[`rt_install_${suffix}`] = `${rtiCount} (${rtiPercent}%)`;
-
-  //   row[`pa_install_${suffix}`] = `${paCount} (${paPercent}%)`;
-
-  //   const installPercent =
-  //     clicks > 0 ? ((installs / clicks) * 100).toFixed(2) : "0.00";
-
-  //   row[`total_install_${suffix}`] = `${installs} (${installPercent}%)`;
-
-  //   // existing flatten logic
-  //   for (const [key, val] of Object.entries(data)) {
-  //     if (typeof val === "object" && val !== null && "value" in val) {
-  //       row[`${key}_${suffix}`] = val.value;
-  //       row[`${key}_${suffix}_color`] = val.color;
-  //     } else {
-  //       row[`${key}_${suffix}`] = val;
-  //     }
-  //   }
-  // };
   const attach = (data, suffix) => {
     const installs = getValue(data.installs);
     const clicks = getValue(data.clicks);
@@ -863,7 +667,6 @@ function flattenRow({
   attach(mtd, "mtd");
   attach(primary, primaryLabel);
   attach(secondary, secondaryLabel);
-
   return row;
 }
 

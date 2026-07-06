@@ -51,7 +51,8 @@ const QUERIES = {
     events,
     rule1_params,
     rule2_params,
-    ignore_metrics
+    ignore_metrics,
+     config_type
   FROM campaign_configs
   WHERE JSON_CONTAINS(campaign_name, JSON_QUOTE(?))
     AND os = ?
@@ -173,55 +174,69 @@ const QUERIES = {
     const campaignPlaceholders = campaign_ids.length
       ? campaign_ids.map(() => "?").join(",")
       : "";
+
     const geoCondition = buildGeoConditionCM(geo);
 
     return `
-      SELECT
-        cm.pubam,
-        cm.pubid,
-        cm.pid,
+    SELECT
+      cm.pubam,
+      cm.pubid,
+      cm.pid,
 
-        SUM(
-          CASE
-            WHEN cem.event_name = ?
-            THEN cem.count ELSE 0
-          END
-        ) AS e2_total,
+      SUM(
+        CASE
+          WHEN cem.event_name = ?
+          THEN cem.count
+          ELSE 0
+        END
+      ) AS e1_total,
 
-        SUM(
-          CASE
-            WHEN cem.event_name = ?
-              AND cem.event_type = 'pe'
-            THEN cem.count ELSE 0
-          END
-        ) AS pe_e2_total
+      SUM(
+        CASE
+          WHEN cem.event_name = ?
+          THEN cem.count
+          ELSE 0
+        END
+      ) AS e2_total,
 
-      FROM campaign_metrics_new cm
+      SUM(
+        CASE
+          WHEN cem.event_name = ?
+             AND cem.event_type='pe'
+          THEN cem.count
+          ELSE 0
+        END
+      ) AS pe_e1_total,
 
-      JOIN campaign_event_metrics_new cem
-        ON cem.campaign_metrics_id = cm.id
+      SUM(
+        CASE
+          WHEN cem.event_name = ?
+             AND cem.event_type='pe'
+          THEN cem.count
+          ELSE 0
+        END
+      ) AS pe_e2_total
 
-      WHERE cm.campaign_name = ?
-        AND cm.os = ?
-         AND cm.is_paused = 0
-        AND (
-          cm.campaign_id IN (${campaignPlaceholders})
+    FROM campaign_metrics_new cm
 
-          OR (
+    JOIN campaign_event_metrics_new cem
+      ON cem.campaign_metrics_id = cm.id
 
-            (cm.campaign_id IS NULL OR cm.campaign_id = '')
+    WHERE cm.campaign_name = ?
+      AND cm.os = ?
+      AND cm.is_paused = 0
 
-            AND (
-              ${geoCondition}
-            )
+      AND ${buildCampaignCondition(campaignPlaceholders, geoCondition, "cm.")}
 
-          )
-        )
+      AND cem.metrics_date
+          BETWEEN DATE_SUB(?, INTERVAL 6 DAY)
+          AND ?
 
-        AND cem.metrics_date
-          BETWEEN DATE_SUB(?, INTERVAL 6 DAY) AND ?
-      GROUP BY cm.pubam, cm.pubid, cm.pid
-    `;
+    GROUP BY
+      cm.pubam,
+      cm.pubid,
+      cm.pid
+  `;
   },
 };
 

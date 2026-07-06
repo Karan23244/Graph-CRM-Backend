@@ -474,6 +474,13 @@ const handleUpload = async (req, res) => {
   try {
     const { campaignName, os, geo, dateRange, socketId } = req.body;
     const campaignIds = JSON.parse(req.body.campaign_ids || "[]");
+    console.log("Received upload request:", {
+      campaignName,
+      os,
+      geo,
+      dateRange,
+      campaignIds,
+    });
     console.log(socketId);
     const fullCampaignName = campaignName;
     const baseCampaignName = campaignName.split(",")[0];

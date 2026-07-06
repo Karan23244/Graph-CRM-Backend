@@ -6,16 +6,6 @@ const service = require("../services/analyticsService");
 exports.getRevenueAnalytics = async (req, res) => {
   try {
     const { user_id, role, month, assign_subadmin } = req.body;
-    console.log(
-      "📊 Analytics Request - user_id:",
-      user_id,
-      "role:",
-      role,
-      "month:",
-      month,
-      "assign_subadmin:",
-      assign_subadmin,
-    );
     if (!month) {
       return res.status(400).json({
         error: "month required",
@@ -29,8 +19,6 @@ exports.getRevenueAnalytics = async (req, res) => {
       role,
       assign_subadmin,
     );
-
-    console.log("Publisher IDs for analytics:", pubIds);
 
     const [geo, vertical, os] = await Promise.all([
       service.getTopGeo(pubIds, month),

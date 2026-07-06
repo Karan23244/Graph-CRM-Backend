@@ -6,8 +6,8 @@ const pool = require("../config/db");
 exports.normalizeRole = (role) => {
   if (Array.isArray(role)) role = role[0];
 
-  if (["publisher", "publisher_manager"].includes(role)) return role;
-  if (["advertiser", "advertiser_manager"].includes(role)) return role;
+  if (["publisher","pub_executive", "publisher_manager"].includes(role)) return role;
+  if (["advertiser", "adv_executive", "advertiser_manager"].includes(role)) return role;
 
   return role; // admin or others
 };

@@ -6,15 +6,12 @@
 
 "use strict";
 const { getDecisionMatrix } = require("./decisionMatrixStore");
+const METRIC_MAP = require("./decisionEngine.metricMap");
 // ─────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────
-
+console.log(METRIC_MAP);
 const COLOR_TO_GRADE = { green: "A", yellow: "B", orange: "C", red: "D" };
-const GRADE_ORDER = { A: 0, B: 1, C: 2, D: 3 };
-
-// Tiebreak order when two metrics share the same grade
-const METRIC_PRIORITY = ["c2i", "fraud", "i2e2", "pa_e2"];
 
 // Grading source map — which param block + key each metric uses
 const GRADING_SOURCE = {
@@ -22,45 +19,6 @@ const GRADING_SOURCE = {
   i2e2: { block: "rule1", key: "ITE2" },
   fraud: { block: "rule2", key: "Total Install Fraud" },
   pa_e2: { block: "rule2", key: "PA E2" },
-};
-
-// ─────────────────────────────────────────────
-// DECISION MATRIX
-// Key format: "{metricWithA}|{metricWithB}|{metricWithC}|{metricWithD}"
-// ─────────────────────────────────────────────
-
-const DECISION_MATRIX = {
-  // ── A = c2i ──────────────────────────────────────
-  "c2i|fraud|i2e2|pa_e2": "Optimise",
-  "c2i|fraud|pa_e2|i2e2": "Optimise",
-  "c2i|i2e2|fraud|pa_e2": "Pause",
-  "c2i|i2e2|pa_e2|fraud": "Pause",
-  "c2i|pa_e2|fraud|i2e2": "Optimise",
-  "c2i|pa_e2|i2e2|fraud": "Pause",
-
-  // ── A = fraud ─────────────────────────────────────
-  "fraud|c2i|i2e2|pa_e2": "Optimise",
-  "fraud|c2i|pa_e2|i2e2": "Optimise",
-  "fraud|i2e2|c2i|pa_e2": "Optimise",
-  "fraud|i2e2|pa_e2|c2i": "Optimise",
-  "fraud|pa_e2|c2i|i2e2": "Optimise",
-  "fraud|pa_e2|i2e2|c2i": "Optimise",
-
-  // ── A = i2e2 ─────────────────────────────────────
-  "i2e2|c2i|fraud|pa_e2": "Optimise",
-  "i2e2|c2i|pa_e2|fraud": "Pause",
-  "i2e2|fraud|c2i|pa_e2": "Optimise",
-  "i2e2|fraud|pa_e2|c2i": "Optimise",
-  "i2e2|pa_e2|c2i|fraud": "Pause",
-  "i2e2|pa_e2|fraud|c2i": "Optimise",
-
-  // ── A = pa_e2 ────────────────────────────────────
-  "pa_e2|c2i|fraud|i2e2": "Optimise",
-  "pa_e2|c2i|i2e2|fraud": "Pause",
-  "pa_e2|fraud|c2i|i2e2": "Optimise",
-  "pa_e2|fraud|i2e2|c2i": "Optimise",
-  "pa_e2|i2e2|c2i|fraud": "Pause",
-  // pa_e2|i2e2|fraud|c2i — not defined in spec, defaults to Stable
 };
 
 // ─────────────────────────────────────────────
@@ -98,7 +56,7 @@ function getGrade(value, paramConfig) {
 }
 
 /**
- * Grades all four metrics.
+ * Grades all metrics defined for the current provider.
  * Metrics in ignoreList are excluded from decision logic but still
  * returned in the response with ignored:true and grade:null.
  *
@@ -108,16 +66,31 @@ function getGrade(value, paramConfig) {
  * @param {string[]} ignoreList  e.g. ['fraud']
  * @returns {object} { c2i: { value, grade, ignored }, ... }
  */
-function gradeMetrics(metricValues, rule1Params, rule2Params, ignoreList) {
-  const paramBlocks = { rule1: rule1Params, rule2: rule2Params };
+function gradeMetrics(
+  metricValues,
+  rule1Params,
+  rule2Params,
+  ignoreList,
+  providerName,
+) {
+  const provider = METRIC_MAP[providerName];
 
   return Object.fromEntries(
-    Object.entries(GRADING_SOURCE).map(([metric, { block, key }]) => {
+    provider.metrics.map(({ metric, block, key }) => {
       const ignored = ignoreList.includes(metric);
+
       const value = metricValues[metric];
-      const config = paramBlocks[block]?.[key] ?? null;
-      const grade = ignored ? null : getGrade(value, config);
-      return [metric, { value, grade, ignored }];
+
+      const config = block === "rule1" ? rule1Params[key] : rule2Params[key];
+
+      return [
+        metric,
+        {
+          value,
+          grade: ignored ? null : getGrade(value, config),
+          ignored,
+        },
+      ];
     }),
   );
 }
@@ -130,23 +103,42 @@ function gradeMetrics(metricValues, rule1Params, rule2Params, ignoreList) {
  * Computes raw metric percentages from aggregated DB values.
  * Safe division: returns 0 when denominator is 0.
  */
-function computeMetrics({ clicks, installs, rti, pi, e2Total, peE2Total }) {
+function computeMetrics(
+  { clicks, installs, rti, pi, e1Total, e2Total, peE1Total, peE2Total },
+  providerName,
+) {
+  const provider = METRIC_MAP[providerName];
+
   clicks = Number(clicks) || 0;
   installs = Number(installs) || 0;
+
   rti = Number(rti) || 0;
   pi = Number(pi) || 0;
+
+  e1Total = Number(e1Total) || 0;
   e2Total = Number(e2Total) || 0;
+
+  peE1Total = Number(peE1Total) || 0;
   peE2Total = Number(peE2Total) || 0;
 
-  const pct = (num, den) =>
-    den > 0 ? parseFloat(((num / den) * 100).toFixed(2)) : 0;
+  const pct = (a, b) => (b > 0 ? Number(((a / b) * 100).toFixed(2)) : 0);
 
-  return {
+  const metrics = {
     c2i: pct(installs, clicks),
-    fraud: pct(rti + pi, installs),
+    i2e1: pct(e1Total, installs),
     i2e2: pct(e2Total, installs),
-    pa_e2: pct(peE2Total, e2Total),
   };
+
+  if (provider.hasFraud) {
+    metrics.fraud = pct(rti + pi, installs);
+  }
+
+  if (provider.hasPaidEvents) {
+    metrics.pa_e1 = pct(peE1Total, e1Total);
+    metrics.pa_e2 = pct(peE2Total, e2Total);
+  }
+
+  return metrics;
 }
 
 // ─────────────────────────────────────────────
@@ -169,8 +161,8 @@ function checkEligibility({
   clicksPerDay,
   installsPerDay,
 }) {
-  const clickCap = clicks5d >= clicksPerDay * 5;
-  const installCap = installs5d >= installsPerDay * 5;
+  const clickCap = clicks5d >= clicksPerDay;
+  const installCap = installs5d >= installsPerDay;
 
   let minSharedDaysReached = false;
 
@@ -201,12 +193,21 @@ function checkEligibility({
  * Returns null if fraud does not trigger an early exit,
  * or 'Pause' if it does.
  */
-function applyFraudRule(gradedMetrics) {
-  const { fraud } = gradedMetrics;
-  if (!fraud.ignored && fraud.grade === "D") return "Pause";
+function applyFraudRule(gradedMetrics, providerName) {
+  const provider = METRIC_MAP[providerName];
+
+  if (!provider.hasFraud) return null;
+
+  const fraud = gradedMetrics.fraud;
+
+  if (!fraud) return null;
+
+  if (!fraud.ignored && fraud.grade === "D") {
+    return "Pause";
+  }
+
   return null;
 }
-
 /**
  * STEP 2 — Combination matrix lookup.
  * Builds the decision key by sorting active (non-ignored) metrics
@@ -215,33 +216,27 @@ function applyFraudRule(gradedMetrics) {
  *
  * Falls back to 'Stable' for any unmatched combination.
  */
-function applyDecisionMatrix(gradedMetrics) {
-  const active = Object.entries(gradedMetrics)
-    .filter(([, { ignored, grade }]) => !ignored && grade !== null)
-    .sort(([ma, a], [mb, b]) => {
-      const gradeDiff = GRADE_ORDER[a.grade] - GRADE_ORDER[b.grade];
-      if (gradeDiff !== 0) return gradeDiff;
-      return METRIC_PRIORITY.indexOf(ma) - METRIC_PRIORITY.indexOf(mb);
-    });
+function applyDecisionMatrix(gradedMetrics, provider) {
+    const providerConfig = METRIC_MAP[provider];
 
-  const key = [
-    gradedMetrics.c2i.grade,
-    gradedMetrics.fraud.grade,
-    gradedMetrics.i2e2.grade,
-    gradedMetrics.pa_e2.grade,
-  ].join("|");
-  console.log(`Constructed decision key: ${key}`);
-  const matrix = getDecisionMatrix();
-  console.log(`Decision key: ${key}`);
-  console.log(`Matrix lookup result: ${matrix[key]}`);
-  return matrix[key] ?? "Stable";
+    const key = providerConfig.metrics
+        .map(({ metric }) => gradedMetrics[metric].grade)
+        .join("|");
+
+    console.log("Generated Key:", key);
+
+    const matrix = getDecisionMatrix(provider);
+
+    console.log("Decision:", matrix[key]);
+
+    return matrix[key] ?? "Stable";
 }
 
 /**
  * Master evaluation: runs Step 1 then Step 2.
  * Only called when the row is eligible.
  */
-function evaluateStatus(gradedMetrics) {
+function evaluateStatus(gradedMetrics, provider) {
   // Stable if all active metrics are Grade A
   const activeMetrics = Object.values(gradedMetrics).filter(
     (m) => !m.ignored && m.grade !== null,
@@ -254,7 +249,10 @@ function evaluateStatus(gradedMetrics) {
     return "Stable";
   }
 
-  return applyFraudRule(gradedMetrics) ?? applyDecisionMatrix(gradedMetrics);
+  return (
+    applyFraudRule(gradedMetrics, provider) ??
+    applyDecisionMatrix(gradedMetrics, provider)
+  );
 }
 
 // ─────────────────────────────────────────────

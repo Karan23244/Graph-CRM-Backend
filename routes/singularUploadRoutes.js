@@ -1,7 +1,9 @@
 // routes/adjustUploadRoutes.js
 const express = require("express");
 const multer = require("multer");
-const { handlesingularUpload } = require("../controllers/singularUploadController");
+const {
+  handlesingularUpload,
+} = require("../controllers/singularUploadController");
 
 const router = express.Router();
 
@@ -22,8 +24,8 @@ const singularUpload = multer({
 
 router.post(
   "/singular-metrics",
-  singularUpload.fields([{ name: "adjustFiles", maxCount: 10 }]),
-  handlesingularUpload
+  singularUpload.fields([{ name: "files", maxCount: 10 }]),
+  handlesingularUpload,
 );
 
 module.exports = router;

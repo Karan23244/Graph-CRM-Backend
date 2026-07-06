@@ -2,35 +2,49 @@
 
 const ExcelJS = require("exceljs");
 const path = require("path");
+const PROVIDERS = require("./decisionEngine.providers");
 
-async function loadDecisionMatrix(
-  filePath = path.join(
-    __dirname,
-    "../data/c2i_pi_cre_pae_256_possibilitiess.xlsx",
-  ),
-) {
+async function loadDecisionMatrix(provider) {
+  const providerConfig = PROVIDERS[provider];
+  console.log(provider)
+  if (!providerConfig) {
+    throw new Error(`Unsupported provider: ${provider}`);
+  }
+
+  const filePath = path.join(__dirname, "../data", providerConfig.matrixFile);
+
   const workbook = new ExcelJS.Workbook();
+
   await workbook.xlsx.readFile(filePath);
 
   const worksheet = workbook.worksheets[0];
 
+  if (!worksheet) {
+    throw new Error(`No worksheet found in ${providerConfig.matrixFile}`);
+  }
+
   const headers = {};
+
   worksheet.getRow(1).eachCell((cell, col) => {
     headers[String(cell.value).trim().toLowerCase()] = col;
   });
-  console.log("Identified headers:", headers); // Debugging line
-  const c2iCol = headers["c2i"];
-  const piCol = headers["pi"];
-  const cre2Col = headers["cre2"];
-  const pae2Col = headers["pae2"];
+
+  const metricColumns = providerConfig.metrics.map(({ column }) => {
+    const col = headers[column.toLowerCase()];
+    if (!col) {
+      throw new Error(
+        `Missing "${column}" column in ${provider} decision matrix`,
+      );
+    }
+
+    return col;
+  });
 
   const decisionCol =
     headers["suggested comment"] || headers["decision"] || headers["status"];
 
-  if (!c2iCol || !piCol || !cre2Col || !pae2Col || !decisionCol) {
-    throw new Error(
-      "Required columns not found in decision matrix spreadsheet",
-    );
+  if (!decisionCol) {
+    throw new Error("Decision column not found");
   }
 
   const matrix = {};
@@ -38,31 +52,22 @@ async function loadDecisionMatrix(
   worksheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return;
 
-    const c2i = String(row.getCell(c2iCol).value || "")
-      .trim()
-      .toUpperCase();
+    const grades = metricColumns.map((column) =>
+      String(row.getCell(column).value || "")
+        .trim()
+        .toUpperCase(),
+    );
 
-    const pi = String(row.getCell(piCol).value || "")
-      .trim()
-      .toUpperCase();
-
-    const cre2 = String(row.getCell(cre2Col).value || "")
-      .trim()
-      .toUpperCase();
-
-    const pae2 = String(row.getCell(pae2Col).value || "")
-      .trim()
-      .toUpperCase();
+    if (grades.some((g) => !g)) return;
 
     const decision = String(row.getCell(decisionCol).value || "Stable").trim();
 
-    if (!c2i || !pi || !cre2 || !pae2) return;
-
-    const key = `${c2i}|${pi}|${cre2}|${pae2}`;
-    matrix[key] = decision;
+    matrix[grades.join("|")] = decision;
   });
 
   return matrix;
 }
 
-module.exports = { loadDecisionMatrix };
+module.exports = {
+  loadDecisionMatrix,
+};

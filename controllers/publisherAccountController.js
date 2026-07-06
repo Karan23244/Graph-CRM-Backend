@@ -247,8 +247,21 @@ const pool = require("../config/db");
 // UPDATE publisher account
 
 exports.getPublisherAccount = async (req, res) => {
-  const { user_id, role = [], assigned_subadmins = [], month } = req.body;
-
+  const {
+    user_id,
+    pubid,
+    role = [],
+    assigned_subadmins = [],
+    month,
+  } = req.body;
+  console.log("api hit");
+  console.log("Publisher account request1:", {
+    user_id,
+    pubid,
+    role,
+    assigned_subadmins,
+    month,
+  });
   try {
     let totals = [];
 
@@ -326,8 +339,26 @@ exports.getPublisherAccount = async (req, res) => {
       );
 
       totals = result;
-    }
+    } else if (role.includes("publisher_external")) {
+      const [result] = await pool.query(
+        `
+  SELECT
+    pa.*,
+    p.pub_name,
+    p.note
+  FROM publisher_account pa
+  JOIN publids p ON pa.pub_id = p.pub_id
+  WHERE pa.pub_id = ?
+  ${month ? "AND pa.month = ?" : ""}
+  ORDER BY pa.month DESC
+  `,
+        month ? [pubid, month] : [pubid],
+      );
 
+      console.log("QUERY RESULT:", result);
+
+      totals = result;
+    }
     // ❌ UNAUTHORIZED
     else {
       return res.status(403).json({ message: "Unauthorized" });
@@ -412,8 +443,24 @@ exports.getPublisherAccount = async (req, res) => {
       );
 
       finalData = result;
-    }
+    } else if (role.includes("publisher_external")) {
+      const [result] = await pool.query(
+        `
+    SELECT
+      pa.*,
+      p.pub_name,
+      p.note
+    FROM publisher_account pa
+    JOIN publids p ON pa.pub_id = p.pub_id
+    WHERE pa.pub_id = ?
+    ${month ? "AND pa.month = ?" : ""}
+    ORDER BY pa.month DESC
+    `,
+        month ? [pubid, month] : [pubid],
+      );
 
+      finalData = result;
+    }
     /* ============================= */
     /* 4️⃣ RESPONSE                */
     /* ============================= */

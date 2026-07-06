@@ -88,12 +88,12 @@ async function runDecisionEngine({
       return false;
     }
   });
-
   if (!config) {
     throw new Error(
       `No matching config found for campaign="${campaign_name}", os="${os}"`,
     );
   }
+  const provider = config.config_type || "appsflyer";
 
   // Parse all JSON columns safely
   const rule1Params = safeParseJSON(config.rule1_params, {});
@@ -103,12 +103,6 @@ async function runDecisionEngine({
 
   // E2 = second element in the events array (index 1)
   // e.g. events = ["", "submit_success"]  =>  e2EventName = "submit_success"
-  const e2EventName = events[1] && events[1].trim() ? events[1].trim() : null;
-  if (!e2EventName) {
-    throw new Error(
-      `E2 event not set in campaign_configs.events for campaign="${campaign_name}"`,
-    );
-  }
 
   // ── STEP B: Three parallel DB queries ─────────────────────────────────────
   //
@@ -131,6 +125,27 @@ async function runDecisionEngine({
   //  GET_EVENT_METRICS   => [e2EventName, e2EventName, campaign_name, os, date, date]
   //                          ^ e2_total   ^ pe_e2_total
   //
+  const eventQuery = QUERIES.GET_EVENT_METRICS(campaign_ids, geo);
+
+  const e1EventName = events[0]?.trim() || "";
+  const e2EventName = events[1]?.trim() || "";
+  console.log("e1EventName",e1EventName,e2EventName);
+  const eventParams = [
+    e1EventName,
+    e2EventName,
+
+    e1EventName,
+    e2EventName,
+
+    campaign_name,
+    os,
+
+    ...campaign_ids,
+    ...geo,
+
+    date,
+    date,
+  ];
   const [[clickRows], [installRows], [eventRows]] = await Promise.all([
     db.query(QUERIES.GET_CLICK_METRICS(campaign_ids, geo), [
       date,
@@ -162,22 +177,9 @@ async function runDecisionEngine({
       date,
     ]),
 
-    db.query(QUERIES.GET_EVENT_METRICS(campaign_ids, geo), [
-      e2EventName,
-      e2EventName,
-
-      campaign_name,
-      os,
-
-      ...campaign_ids,
-      ...geo,
-
-      date,
-      date,
-      date,
-    ]),
+    db.query(eventQuery, eventParams),
   ]);
-  
+
   // ── STEP C: Index each result set by group key ────────────────────────────
   //
   // Group key = "pubam||pubid||pid"
@@ -206,14 +208,33 @@ async function runDecisionEngine({
 
     // 1. Compute metric percentages
     //    computeMetrics() lives in decisionEngine.logic.js
-    const metricValues = computeMetrics({
-      clicks: click.total_clicks || 0,
-      installs: install.total_installs || 0,
-      rti: install.total_rti || 0,
-      pi: install.total_pi || 0,
-      e2Total: event.e2_total || 0,
-      peE2Total: event.pe_e2_total || 0,
-    });
+    console.log({
+    clicks: click.total_clicks,
+    installs: install.total_installs,
+    rti: install.total_rti,
+    pi: install.total_pi,
+
+    e1Total: event.e1_total,
+    e2Total: event.e2_total,
+
+    peE1Total: event.pe_e1_total,
+    peE2Total: event.pe_e2_total,
+});
+    const metricValues = computeMetrics(
+      {
+        clicks: click.total_clicks,
+        installs: install.total_installs,
+        rti: install.total_rti,
+        pi: install.total_pi,
+
+        e1Total: event.e1_total,
+        e2Total: event.e2_total,
+
+        peE1Total: event.pe_e1_total,
+        peE2Total: event.pe_e2_total,
+      },
+      provider,
+    );
 
     // 2. Eligibility check (uses 5-day sub-aggregates from click/install queries)
     //    checkEligibility() lives in decisionEngine.logic.js
@@ -233,6 +254,7 @@ async function runDecisionEngine({
       rule1Params,
       rule2Params,
       ignoreMetrics,
+      provider,
     );
 
     // 4. Evaluate final status — only when row is eligible
@@ -240,7 +262,7 @@ async function runDecisionEngine({
     //      Step 1 → fraud gate   (if fraud grade = D => force Pause)
     //      Step 2 → matrix lookup (sort grades A-D, build key, look up DECISION_MATRIX)
     const status = eligibility.eligible
-      ? evaluateStatus(gradedMetrics)
+      ? evaluateStatus(gradedMetrics, provider)
       : "Not Eligible";
 
     results.push({
@@ -254,12 +276,7 @@ async function runDecisionEngine({
         link_active: eligibility.linkActive,
       },
       status,
-      metrics: {
-        c2i: gradedMetrics.c2i,
-        fraud: gradedMetrics.fraud,
-        i2e2: gradedMetrics.i2e2,
-        pa_e2: gradedMetrics.pa_e2,
-      },
+      metrics: gradedMetrics,
     });
   }
 

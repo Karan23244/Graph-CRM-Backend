@@ -22,7 +22,7 @@ const adjustUpload = multer({
 
 router.post(
   "/adjust-metrics",
-  adjustUpload.fields([{ name: "adjustFiles", maxCount: 10 }]),
+  adjustUpload.fields([{ name: "files", maxCount: 10 }]),
   handleAdjustUpload
 );
 

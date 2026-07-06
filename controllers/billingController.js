@@ -5,7 +5,7 @@ const { normalizeRole, getSubAdminIds } = require("../helpers/billinghelpers");
 ===================================================== */
 exports.getBillingDropdowns = async (req, res) => {
   try {
-    let { roles, user_id,assigned_to } = req.body;
+    let { roles, user_id, assigned_to = [] } = req.body;
     // Ensure roles is always an array
     if (!Array.isArray(roles)) {
       roles = [roles];
@@ -365,6 +365,7 @@ ORDER BY campaign_key;
 exports.getPublisherExternalBilling = async (req, res) => {
   const { pubid: pub_id, month } = req.body;
   console.log("Publisher External Billing Request:", { pub_id, month });
+
   if (!pub_id || !month) {
     return res.status(400).json({
       success: false,
@@ -374,14 +375,13 @@ exports.getPublisherExternalBilling = async (req, res) => {
 
   try {
     const sql = `
-      SELECT
+    SELECT
         id,
         adv_data_id,
         pid,
         campaign_id,
         pub_id,
         shared_date,
-
         campaign_name,
         geo,
         os,
@@ -390,19 +390,19 @@ exports.getPublisherExternalBilling = async (req, res) => {
         adv_total_no,
         pub_Apno,
         vertical,
-
-        CASE 
-          WHEN is_verified = 2 THEN 'locked'
-          WHEN is_verified = 1 THEN 'verified'
-          ELSE 'unverified'
+        CASE
+            WHEN is_verified = 2 THEN 'locked'
         END AS status
-
-      FROM pub_data_verified
-
-      WHERE pub_id = ?
-        AND DATE_FORMAT(shared_date, '%Y-%m') = ?
-
-      ORDER BY campaign_id, pid;
+    FROM pub_data_verified
+    WHERE pub_id = ?
+      AND billing_month = ?
+      AND pub_Apno IS NOT NULL
+      AND pub_Apno != ''
+      AND pub_Apno > 0
+      AND adv_total_no IS NOT NULL
+      AND adv_total_no != ''
+      AND adv_total_no > 0
+    ORDER BY campaign_id, pid;
     `;
 
     const [rows] = await pool.query(sql, [pub_id, month]);

@@ -5,7 +5,6 @@ const pool = require("../config/db");
 ===================================================== */
 exports.getAdvertiserBillingData = async (req, res) => {
   let { id: adv_id, month } = req.body;
-  console.log("Advertiser billing data request:", { adv_id, month });
   // normalize month (VERY IMPORTANT)
   month = month.trim(); // "2025-01"
 
@@ -127,7 +126,10 @@ exports.getAdvertiserBillingData = async (req, res) => {
         WHERE adv_id = ?
           AND shared_date LIKE CONCAT(?, '%')
 
-        GROUP BY campaign_name, geo, vertical, payable_event, CAST(adv_payout AS DECIMAL(10,2))
+        GROUP BY TRIM(campaign_name),
+        TRIM(geo),
+        TRIM(vertical),
+        payable_event, CAST(adv_payout AS DECIMAL(10,2))
         `,
         [adv_id, month],
       );
@@ -151,7 +153,10 @@ exports.getAdvertiserBillingData = async (req, res) => {
         WHERE adv_id = ?
           AND shared_date LIKE CONCAT(?, '%')
 
-        GROUP BY campaign_name, geo, vertical, os, payable_event, CAST(adv_payout AS DECIMAL(10,2)), pid
+        GROUP BY TRIM(campaign_name),
+        TRIM(geo),
+        TRIM(vertical),
+        TRIM(os), payable_event, CAST(adv_payout AS DECIMAL(10,2)), pid
         `,
         [adv_id, month],
       );
@@ -569,13 +574,6 @@ exports.lockAdvertiserBilling = async (req, res) => {
 ===================================================== */
 exports.listAdvertiserBilling = async (req, res) => {
   const { user_id, role = [], assigned_subadmins = [], month } = req.body;
-
-  console.log("Advertiser billing request:", {
-    user_id,
-    role,
-    assigned_subadmins,
-    month,
-  });
 
   try {
     let rows;
