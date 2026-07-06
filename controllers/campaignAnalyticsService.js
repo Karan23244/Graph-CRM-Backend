@@ -93,7 +93,13 @@ SUM(
       /* MTD */
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.clicks ELSE 0 END) AS mtd_clicks,
-
+            SUM(
+        CASE
+          WHEN DATE(cm.metrics_date) BETWEEN ? AND ?
+          THEN cm.impressions
+          ELSE 0
+        END
+      ) AS mtd_impressions,
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS mtd_installs,
 
@@ -106,7 +112,13 @@ SUM(
       /* PRIMARY */
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.clicks ELSE 0 END) AS primary_clicks,
-
+      SUM(
+        CASE
+          WHEN DATE(cm.metrics_date) BETWEEN ? AND ?
+          THEN cm.impressions
+          ELSE 0
+        END
+      ) AS primary_impressions,
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS primary_installs,
 
@@ -119,7 +131,13 @@ SUM(
       /* SECONDARY */
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.clicks ELSE 0 END) AS secondary_clicks,
-
+      SUM(
+        CASE
+          WHEN DATE(cm.metrics_date) BETWEEN ? AND ?
+          THEN cm.impressions
+          ELSE 0
+        END
+      ) AS secondary_impressions,
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS secondary_installs,
 
@@ -162,7 +180,8 @@ SUM(
     mtd.end,
     mtd.start,
     mtd.end,
-
+    mtd.start,
+    mtd.end,
     // PRIMARY
     primary.start,
     primary.end,
@@ -172,7 +191,8 @@ SUM(
     primary.end,
     primary.start,
     primary.end,
-
+    primary.start,
+    primary.end,
     // SECONDARY
     secondary.start,
     secondary.end,
@@ -182,7 +202,8 @@ SUM(
     secondary.end,
     secondary.start,
     secondary.end,
-
+    primary.start,
+    primary.end,
     // WHERE
     campaignName,
     os,
@@ -401,6 +422,7 @@ async function getCampaignAnalytics(payload) {
     // Build aggregation objects per window
     const buildAgg = (prefix) => ({
       clicks: row[`${prefix}_clicks`] || 0,
+      impressions: row[`${prefix}_impressions`] || 0,
       installs: row[`${prefix}_installs`] || 0,
       rti: row[`${prefix}_rti`] || 0,
       pi: row[`${prefix}_pi`] || 0,

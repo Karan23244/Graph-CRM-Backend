@@ -28,6 +28,7 @@ function computeKPIs(agg, eventKeys, provider = "appsflyer") {
   const installs = int(agg.installs); // noi
   const rti = int(agg.rti);
   const pi = int(agg.pi);
+  const impressions = int(agg.impressions);
   // const kpis = {
   //   clicks,
   //   installs,
@@ -38,11 +39,13 @@ function computeKPIs(agg, eventKeys, provider = "appsflyer") {
   //   pa_install: pct(pi, installs), // PA Install %
   //   install_fraud: pct(rti + pi, installs), // Total Install Fraud %
   // };
+  const c2iDenominator =
+    clicks > 0 ? clicks : impressions > 0 ? impressions : 0;
+
   const kpis = {
     clicks,
     installs,
-
-    c2i: pct(installs, clicks),
+    c2i: pct(installs, c2iDenominator),
   };
 
   if (PROVIDERS[provider]?.supportsFraud) {

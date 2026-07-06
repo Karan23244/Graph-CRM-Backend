@@ -82,7 +82,15 @@ const QUERIES = {
         pid,
 
         SUM(clicks) AS total_clicks,
-
+        SUM(impressions) AS total_impressions,
+        SUM(
+        CASE
+          WHEN DATE(metrics_date)
+              BETWEEN DATE_SUB(?, INTERVAL 4 DAY) AND ?
+          THEN impressions
+          ELSE 0
+        END
+        ) AS impressions_5d,
         SUM(
         CASE
           WHEN COALESCE(clicks_date, metrics_date)

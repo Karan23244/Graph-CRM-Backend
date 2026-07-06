@@ -104,11 +104,21 @@ function gradeMetrics(
  * Safe division: returns 0 when denominator is 0.
  */
 function computeMetrics(
-  { clicks, installs, rti, pi, e1Total, e2Total, peE1Total, peE2Total },
+  {
+    clicks,
+    impressions,
+    installs,
+    rti,
+    pi,
+    e1Total,
+    e2Total,
+    peE1Total,
+    peE2Total,
+  },
   providerName,
 ) {
   const provider = METRIC_MAP[providerName];
-
+  impressions = Number(impressions) || 0;
   clicks = Number(clicks) || 0;
   installs = Number(installs) || 0;
 
@@ -123,8 +133,11 @@ function computeMetrics(
 
   const pct = (a, b) => (b > 0 ? Number(((a / b) * 100).toFixed(2)) : 0);
 
+  const c2iDenominator =
+    clicks > 0 ? clicks : impressions > 0 ? impressions : 0;
+
   const metrics = {
-    c2i: pct(installs, clicks),
+    c2i: pct(installs, c2iDenominator),
     i2e1: pct(e1Total, installs),
     i2e2: pct(e2Total, installs),
   };
@@ -155,13 +168,17 @@ function computeMetrics(
  */
 function checkEligibility({
   clicks5d,
+  impressions5d,
   installs5d,
   sharedDate,
   selectedDate,
   clicksPerDay,
   installsPerDay,
 }) {
-  const clickCap = clicks5d >= clicksPerDay;
+  const traffic5d =
+    Number(clicks5d) > 0 ? Number(clicks5d) : Number(impressions5d || 0);
+
+  const clickCap = traffic5d >= clicksPerDay;
   const installCap = installs5d >= installsPerDay;
 
   let minSharedDaysReached = false;
@@ -172,6 +189,7 @@ function checkEligibility({
 
     minSharedDaysReached = new Date(selectedDate) >= threshold;
   }
+
   return {
     clickCap,
     installCap,
@@ -217,19 +235,19 @@ function applyFraudRule(gradedMetrics, providerName) {
  * Falls back to 'Stable' for any unmatched combination.
  */
 function applyDecisionMatrix(gradedMetrics, provider) {
-    const providerConfig = METRIC_MAP[provider];
+  const providerConfig = METRIC_MAP[provider];
 
-    const key = providerConfig.metrics
-        .map(({ metric }) => gradedMetrics[metric].grade)
-        .join("|");
+  const key = providerConfig.metrics
+    .map(({ metric }) => gradedMetrics[metric].grade)
+    .join("|");
 
-    console.log("Generated Key:", key);
+  console.log("Generated Key:", key);
 
-    const matrix = getDecisionMatrix(provider);
+  const matrix = getDecisionMatrix(provider);
 
-    console.log("Decision:", matrix[key]);
+  console.log("Decision:", matrix[key]);
 
-    return matrix[key] ?? "Stable";
+  return matrix[key] ?? "Stable";
 }
 
 /**
