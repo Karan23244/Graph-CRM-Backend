@@ -299,33 +299,33 @@ LIMIT 1
 
     // Helper: parse date from various formats. Returns YYYY-MM-DD or null
     const parseDateToISO = (raw) => {
-      if (!raw && raw !== 0) return null;
+      if (raw === null || raw === undefined || raw === "") return null;
+
       raw = String(raw).trim();
-      // common formats: dd/mm/yyyy or yyyy-mm-dd or dd-mm-yyyy
-      // try dd/mm/yyyy
-      const dmy = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-      if (dmy) {
-        const dd = dmy[1].padStart(2, "0");
-        const mm = dmy[2].padStart(2, "0");
-        const yyyy = dmy[3];
+
+      // dd/mm/yy OR dd/mm/yyyy
+      let match = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/);
+
+      if (match) {
+        const dd = match[1].padStart(2, "0");
+        const mm = match[2].padStart(2, "0");
+
+        let yyyy = match[3];
+
+        if (yyyy.length === 2) {
+          yyyy = `20${yyyy}`;
+        }
+
         return `${yyyy}-${mm}-${dd}`;
       }
-      // try ISO-like yyyy-mm-dd
-      const iso = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
-      if (iso) {
-        const yyyy = iso[1];
-        const mm = String(iso[2]).padStart(2, "0");
-        const dd = String(iso[3]).padStart(2, "0");
-        return `${yyyy}-${mm}-${dd}`;
+
+      // yyyy-mm-dd
+      match = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+
+      if (match) {
+        return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
       }
-      // fallback try Date parse
-      const d = new Date(raw);
-      if (!isNaN(d)) {
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        return `${yyyy}-${mm}-${dd}`;
-      }
+
       return null;
     };
 
