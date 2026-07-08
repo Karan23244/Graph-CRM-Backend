@@ -77,6 +77,7 @@ const QUERIES = {
 
     return `
       SELECT
+      campaign_id,
         pubam,
         pubid,
         pid,
@@ -112,7 +113,7 @@ const QUERIES = {
         AND COALESCE(clicks_date, metrics_date)
             BETWEEN DATE_SUB(?, INTERVAL 6 DAY) AND ?
 
-      GROUP BY pubam, pubid, pid
+      GROUP BY campaign_id, pubam, pubid, pid
     `;
   },
 
@@ -135,6 +136,7 @@ const QUERIES = {
 
     return `
   SELECT
+    campaign_id,
     pubam,
     pubid,
     pid,
@@ -161,7 +163,7 @@ const QUERIES = {
 
     AND DATE(COALESCE(install_time, metrics_date))
         BETWEEN DATE_SUB(?, INTERVAL 6 DAY) AND ?
-  GROUP BY pubam, pubid, pid
+  GROUP BY campaign_id, pubam, pubid, pid
 `;
   },
 
@@ -187,6 +189,7 @@ const QUERIES = {
 
     return `
     SELECT
+      cm.campaign_id,
       cm.pubam,
       cm.pubid,
       cm.pid,
@@ -241,6 +244,7 @@ const QUERIES = {
           AND ?
 
     GROUP BY
+      cm.campaign_id,
       cm.pubam,
       cm.pubid,
       cm.pid

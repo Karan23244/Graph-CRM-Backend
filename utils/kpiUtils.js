@@ -45,6 +45,8 @@ function computeKPIs(agg, eventKeys, provider = "appsflyer") {
   const kpis = {
     clicks,
     installs,
+    rti,
+    pi,
     c2i: pct(installs, c2iDenominator),
   };
 

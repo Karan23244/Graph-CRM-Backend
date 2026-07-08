@@ -485,6 +485,7 @@ async function getCampaignAnalytics(payload) {
     );
 
     return flattenRow({
+      campaign_id: row.campaign_id,
       pid,
       pubid: row.pubid,
       pubam: row.pubam,
@@ -588,6 +589,7 @@ function buildEventAgg(eventMap, pidEvents = {}, windowPrefix) {
  */
 
 function flattenRow({
+  campaign_id,
   pid,
   pubid,
   pubam,
@@ -600,7 +602,13 @@ function flattenRow({
   primaryLabel,
   secondaryLabel,
 }) {
-  const row = { pid, pubid, pubam, pid_color };
+  const row = {
+    campaign_id,
+    pid,
+    pubid,
+    pubam,
+    pid_color,
+  };
   row.impressions = Number(total_impressions) || 0;
   // safely extract numeric value
   const getValue = (val) => {
@@ -624,7 +632,7 @@ function flattenRow({
     const fraudPercent = getValue(data.install_fraud);
 
     const rtiCount = getValue(data.rti);
-    const paCount = getValue(data.pi);
+    const paCount = getValue(data.pa);
     const fraudCount = rtiCount + paCount;
 
     row[`rt_install_${suffix}`] = `${rtiCount} (${rtiPercent}%)`;
@@ -685,7 +693,6 @@ function flattenRow({
       }
     }
   };
-
   attach(mtd, "mtd");
   attach(primary, primaryLabel);
   attach(secondary, secondaryLabel);

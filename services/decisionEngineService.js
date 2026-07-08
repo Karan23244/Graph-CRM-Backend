@@ -205,7 +205,7 @@ async function runDecisionEngine({
     const install = installMap[key] || {};
     const event = eventMap[key] || {};
 
-    const { pubam, pubid, pid } = parseGroupKey(key);
+    const { pubam, pubid, pid, campaign_id } = parseGroupKey(key);
 
     // 1. Compute metric percentages
     //    computeMetrics() lives in decisionEngine.logic.js
@@ -270,6 +270,7 @@ async function runDecisionEngine({
       : "Not Eligible";
 
     results.push({
+      campaign_id,
       pubam: pubam || null,
       pubid: pubid || null,
       pid: pid || null,
@@ -293,7 +294,7 @@ async function runDecisionEngine({
 
 /** Build a composite group key from a DB row */
 function groupKey(row) {
-  return `${row.pubam ?? ""}||${row.pubid ?? ""}||${row.pid ?? ""}`;
+  return `${row.campaign_id ?? ""}||${row.pubam ?? ""}||${row.pubid ?? ""}||${row.pid ?? ""}`;
 }
 
 /** Convert an array of DB rows into a { groupKey => row } map */
@@ -306,8 +307,10 @@ function indexByGroup(rows) {
 
 /** Split a composite group key back into its three fields */
 function parseGroupKey(key) {
-  const [pubam, pubid, pid] = key.split("||");
+  const [campaign_id, pubam, pubid, pid] = key.split("||");
+
   return {
+    campaign_id: Number(campaign_id),
     pubam: pubam || null,
     pubid: pubid || null,
     pid: pid || null,
