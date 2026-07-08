@@ -10,7 +10,6 @@ const METRIC_MAP = require("./decisionEngine.metricMap");
 // ─────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────
-console.log(METRIC_MAP);
 const COLOR_TO_GRADE = { green: "A", yellow: "B", orange: "C", red: "D" };
 
 // Grading source map — which param block + key each metric uses
@@ -241,11 +240,8 @@ function applyDecisionMatrix(gradedMetrics, provider) {
     .map(({ metric }) => gradedMetrics[metric].grade)
     .join("|");
 
-  console.log("Generated Key:", key);
-
   const matrix = getDecisionMatrix(provider);
 
-  console.log("Decision:", matrix[key]);
 
   return matrix[key] ?? "Stable";
 }

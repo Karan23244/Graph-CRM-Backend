@@ -209,19 +209,6 @@ async function runDecisionEngine({
 
     // 1. Compute metric percentages
     //    computeMetrics() lives in decisionEngine.logic.js
-    console.log({
-      clicks: click.total_clicks,
-      installs: install.total_installs,
-      impressions: click.total_impressions,
-      rti: install.total_rti,
-      pi: install.total_pi,
-
-      e1Total: event.e1_total,
-      e2Total: event.e2_total,
-
-      peE1Total: event.pe_e1_total,
-      peE2Total: event.pe_e2_total,
-    });
     const metricValues = computeMetrics(
       {
         clicks: click.total_clicks,

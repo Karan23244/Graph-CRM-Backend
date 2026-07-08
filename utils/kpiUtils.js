@@ -8,7 +8,6 @@ function pct(numerator, denominator) {
   if (!denominator || denominator === 0) return 0;
   return parseFloat(((numerator / denominator) * 100).toFixed(2));
 }
-console.log("KPI UTILS LOADED", { PROVIDERS });
 /**
  * Safe integer fallback
  */
@@ -29,6 +28,11 @@ function computeKPIs(agg, eventKeys, provider = "appsflyer") {
   const rti = int(agg.rti);
   const pi = int(agg.pi);
   const impressions = int(agg.impressions);
+  console.log("AGG", {
+    installs: agg.installs,
+    rti: agg.rti,
+    pi: agg.pi,
+  });
   // const kpis = {
   //   clicks,
   //   installs,

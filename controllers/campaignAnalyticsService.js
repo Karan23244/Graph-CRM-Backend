@@ -420,14 +420,22 @@ async function getCampaignAnalytics(payload) {
     const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
 
     // Build aggregation objects per window
-    const buildAgg = (prefix) => ({
-      clicks: row[`${prefix}_clicks`] || 0,
-      impressions: row[`${prefix}_impressions`] || 0,
-      installs: row[`${prefix}_installs`] || 0,
-      rti: row[`${prefix}_rti`] || 0,
-      pi: row[`${prefix}_pi`] || 0,
-      events: buildEventAgg(eventMap, eventMap_db[pidKey], prefix),
-    });
+    const buildAgg = (prefix) => {
+      console.log(prefix, {
+        installs: row[`${prefix}_installs`],
+        rti: row[`${prefix}_rti`],
+        pi: row[`${prefix}_pi`],
+      });
+
+      return {
+        clicks: row[`${prefix}_clicks`] || 0,
+        impressions: row[`${prefix}_impressions`] || 0,
+        installs: row[`${prefix}_installs`] || 0,
+        rti: row[`${prefix}_rti`] || 0,
+        pi: row[`${prefix}_pi`] || 0,
+        events: buildEventAgg(eventMap, eventMap_db[pidKey], prefix),
+      };
+    };
 
     const aggMtd = buildAgg("mtd");
     const aggPrimary = buildAgg("primary");
@@ -632,7 +640,7 @@ function flattenRow({
     const fraudPercent = getValue(data.install_fraud);
 
     const rtiCount = getValue(data.rti);
-    const paCount = getValue(data.pa);
+    const paCount = getValue(data.pi);
     const fraudCount = rtiCount + paCount;
 
     row[`rt_install_${suffix}`] = `${rtiCount} (${rtiPercent}%)`;

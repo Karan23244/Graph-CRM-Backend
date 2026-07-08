@@ -7,8 +7,6 @@ const db = require("../config/db");
 // 🔹 Get Publisher IDs
 // ==========================
 async function getPublisherIds(user_id, role, assign_subadmin) {
-  console.log("🔹 Current user:", user_id);
-  console.log("🔹 assign_subadmin:", assign_subadmin);
 
   // 🔹 ADMIN → no filter
   if (role === "admin") {
@@ -25,7 +23,6 @@ async function getPublisherIds(user_id, role, assign_subadmin) {
   // 🔹 remove duplicates
   users = [...new Set(users)];
 
-  console.log("🔹 Final users:", users);
 
   // 🔹 Get pub_ids from publids table
   const [rows] = await db.query(
@@ -38,8 +35,6 @@ async function getPublisherIds(user_id, role, assign_subadmin) {
   );
 
   const pubIds = rows.map((r) => String(r.pub_id));
-
-  console.log("✅ Final pub_ids:", pubIds);
 
   return pubIds;
 }

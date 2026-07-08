@@ -26,18 +26,6 @@ function getColor(value, colorRules, pid) {
       const min = Number(ranges[rangeKey].min);
       const max = Number(ranges[rangeKey].max);
 
-      if (pid === "hanahnehu_int") {
-        console.log("COLOR CHECK", {
-          pid,
-          value: numericValue,
-          color,
-          rangeKey,
-          min,
-          max,
-          matched: numericValue >= min && numericValue <= max,
-        });
-      }
-
       if (numericValue >= min && numericValue <= max) {
         return color;
       }

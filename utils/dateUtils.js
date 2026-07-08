@@ -12,7 +12,6 @@
  */
 function buildDateWindows(startDate, endDate, primary = 7, secondary = 3) {
   const end = new Date(endDate);
-  console.log(`Building date windows with end_date=${endDate}, primary=${primary}d, secondary=${secondary}d`);
   const subtractDays = (base, days) => {
     const d = new Date(base);
     d.setDate(d.getDate() - (days - 1)); // inclusive: "last N days" includes end_date

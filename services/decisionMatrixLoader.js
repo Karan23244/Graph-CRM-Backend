@@ -6,7 +6,6 @@ const PROVIDERS = require("./decisionEngine.providers");
 
 async function loadDecisionMatrix(provider) {
   const providerConfig = PROVIDERS[provider];
-  console.log(provider)
   if (!providerConfig) {
     throw new Error(`Unsupported provider: ${provider}`);
   }
