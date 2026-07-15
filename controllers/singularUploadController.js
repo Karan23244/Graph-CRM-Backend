@@ -39,7 +39,6 @@ async function streamXlsxRows(filePath, onRow) {
       .map((h) =>
         h ? h.toString().trim().toLowerCase().replace(/\s+/g, "") : "",
       );
-    console.log("Processed Headers:", headers);
     // read data rows
     sheet.eachRow({ includeEmpty: false }, async (row, rowNumber) => {
       if (rowNumber === 1) return;
@@ -100,7 +99,6 @@ function streamCsvRows(filePath, onRow) {
         ignoreEmpty: true,
       })
       .on("error", (err) => {
-        console.log("❌ CSV Parse Error:", err);
         resolve(); // don't crash
       })
       .on("data", async (row) => {
@@ -111,7 +109,6 @@ function streamCsvRows(filePath, onRow) {
         parser.resume();
       })
       .on("end", () => {
-        console.log("✅ CSV processed safely.");
         resolve();
       });
 
@@ -268,7 +265,6 @@ const handlesingularUpload = async (req, res) => {
       .map((e) => String(e).trim().toLowerCase())
       .filter(Boolean);
 
-    console.log("Allowed Events:", allowedEvents);
     // Build advPidMap from advData
     const advPidMap = new Map();
     for (const d of advData) advPidMap.set(d.pidLower, d);
@@ -363,29 +359,30 @@ const handlesingularUpload = async (req, res) => {
 
           // 1️⃣ Try campaign-name PID token
           const campaignVal = String(row[campaignNameKey] || "");
-          const pidTokenMatch = campaignVal.match(/_([a-zA-Z]+)_\d+/);
-
+          const pidTokenMatch = campaignVal.match(
+            /_([A-Za-z]+)_\d+(?:_[^_]*)?$/,
+          );
           if (pidTokenMatch) {
             const tokenPid = normalizePid(pidTokenMatch[1]);
-            advMatch = advPidMap.get(tokenPid);
-            if (advMatch) pid = tokenPid;
+            // Always keep PID
+            pid = tokenPid;
+
+            // CRM lookup only
+            advMatch = advPidMap.get(tokenPid) || null;
           }
           // 2️⃣ Try Source (normalized + fuzzy match)
           if (!pid) {
             const sourceKey = normalizeKey(/^source$/i);
-            if (sourceKey) {
-              const sourcePid = normalizePid(row[sourceKey]);
+            if (!pid) {
+              const sourceKey = normalizeKey(/^source$/i);
 
-              // exact match
-              advMatch = advPidMap.get(sourcePid);
+              if (sourceKey) {
+                const sourcePid = normalizePid(row[sourceKey]);
 
-              // 🔥 fallback fuzzy match
-              // if (!advMatch) {
-              //   advMatch = findClosestPidMatch(sourcePid, advPidMap);
-              // }
+                // Always use the uploaded source as PID
+                pid = sourcePid;
 
-              if (advMatch) {
-                pid = advMatch.pidLower;
+                advMatch = advPidMap.get(sourcePid) || null;
               }
             }
           }
@@ -403,12 +400,27 @@ const handlesingularUpload = async (req, res) => {
             }
           }
 
-          if (!pid || !advMatch) {
-            console.warn("❌ PID unresolved for row:", campaignVal);
+          if (!pid) {
+            console.warn("❌ Unable to identify PID:", campaignVal);
             return;
           }
 
           filePids.add(pid);
+
+          if (!advMatch) {
+            advMatch = {
+              pid,
+              pidLower: pid,
+              pubid: "N/A",
+              pubam: "N/A",
+              campaign_id: null,
+              shared_date: null,
+              campaign_name: baseCampaignName,
+              pause: 0,
+              nocrm: 1,
+              os,
+            };
+          }
 
           // Try find pub_name & pubid from adv_data
           let pubid = "N/A";
@@ -430,7 +442,28 @@ const handlesingularUpload = async (req, res) => {
 
           if (!metricsDate) metricsDate = startDate;
 
-          const parseNum = (v) => Number(String(v).replace(/,/g, "")) || 0;
+          const parseNum = (v) => {
+            if (v == null) return 0;
+
+            if (typeof v === "number") return v;
+
+            if (typeof v === "object") {
+              if (v.result != null) return Number(v.result) || 0;
+              if (v.text != null)
+                return Number(String(v.text).replace(/,/g, "")) || 0;
+            }
+
+            const s = String(v).trim();
+
+            if (
+              s === "" ||
+              s.toLowerCase() === "n/a" ||
+              s.toLowerCase() === "null"
+            )
+              return 0;
+
+            return Number(s.replace(/,/g, "")) || 0;
+          };
 
           const clicks = parseNum(row[clicksKey]);
           const installs = parseNum(row[installsKey]);
@@ -468,14 +501,6 @@ const handlesingularUpload = async (req, res) => {
 
             dateMap.set(eventName, (dateMap.get(eventName) || 0) + count);
           }
-          console.log({
-            pid,
-            metricsDate,
-            clicksRaw: row[clicksKey],
-            installsRaw: row[installsKey],
-            clicks,
-            installs,
-          });
           // Store metrics
           if (clicks > 0)
             incIfPidDate(metricCounts.clicks, pid, metricsDate, clicks);
@@ -490,16 +515,7 @@ const handlesingularUpload = async (req, res) => {
               impressions,
             );
           // Save pub info (so you don't overwrite later)
-          advPidMap.set(pid, {
-            pid,
-            pidLower: pid,
-            pubid,
-            pubam,
-            campaign_name: baseCampaignName,
-            pause: 0,
-            nocrm: 0,
-            os,
-          });
+          advPidMap.set(pid, advMatch);
           if (totalNoe > 0) {
             incIfPidDate(metricCounts.noe, pid, metricsDate, totalNoe);
           }
@@ -512,33 +528,21 @@ const handlesingularUpload = async (req, res) => {
     } // end for each uploaded file
 
     // Merge advData with prev30 only for PIDs seen in files (same as previous logic)
-    const mergedAdvData = [...advData];
-
+    const mergedAdvData = [...advPidMap.values()];
+    console.log("Merged Data");
+    console.log(
+      mergedAdvData.map((x) => ({
+        pid: x.pid,
+        pubid: x.pubid,
+        pubam: x.pubam,
+      })),
+    );
     const mergedPidSet = new Set(advData.map((d) => d.pidLower));
 
     for (const prev of advDataPrev30) {
       if (filePids.has(prev.pidLower) && !mergedPidSet.has(prev.pidLower)) {
         mergedAdvData.push(prev);
         mergedPidSet.add(prev.pidLower);
-      }
-    }
-
-    // Add placeholder entries for PIDs present in files but missing in adv_data sets.
-    for (const pid of filePids) {
-      if (!advPidMap.has(pid)) {
-        // attempt to set pubid by searching in file rows is non-trivial here (we parsed pubid earlier per-row)
-        // so we'll set pubid to "N/A" and pid to pid string; if you prefer storing pubid from earlier parse,
-        // we could store a map pid->pubid while parsing above. For now, store pubid "N/A".
-        mergedAdvData.push({
-          pid,
-          pidLower: pid,
-          pubid: pid,
-          pubam: "N/A",
-          campaign_name: baseCampaignName,
-          pause: 0,
-          nocrm: 0,
-          os,
-        });
       }
     }
 
@@ -582,10 +586,10 @@ const handlesingularUpload = async (req, res) => {
             metricCounts.impressions.get(pidLower)?.get(date),
           ),
         };
-
+        const finalCampaignId = d.campaign_id ?? campaignIds[0];
         metricsData.push([
           fullCampaignName,
-          d.campaign_id,
+          finalCampaignId,
           d.shared_date,
           os,
           geo,
@@ -602,13 +606,13 @@ const handlesingularUpload = async (req, res) => {
         ]);
       }
     }
-    console.log(metricsData[0]);
     // Insert into DB
     const sqlMetrics = `
       INSERT INTO campaign_metrics_new
       (
       campaign_name,
       campaign_id,
+      shared_date,
       os,
       geo,
       metrics_date,
@@ -697,7 +701,7 @@ WHERE campaign_name = ? AND os = ?
     // Emit socket event if socketId provided
     const io = req.app.get("io");
     if (socketId && io && io.sockets && io.sockets.sockets.get(socketId)) {
-      io.to(socketId).emit("uploadsingularComplete", {
+      io.to(socketId).emit("uploadComplete", {
         status: "success",
         message: "Upload successful",
         campaignName,

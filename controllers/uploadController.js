@@ -481,7 +481,6 @@ const handleUpload = async (req, res) => {
       dateRange,
       campaignIds,
     });
-    console.log(socketId);
     const fullCampaignName = campaignName;
     const baseCampaignName = campaignName.split(",")[0];
 

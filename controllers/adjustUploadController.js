@@ -148,19 +148,16 @@ async function batchInsert(sql, data, batchSize = 500) {
 // ---------------------------
 // Fetch adv_data by campaign + dateRange
 // ---------------------------
-async function getAdvDataFromDB(campaignName, startDate, endDate, os) {
-  console.log("campaignName", campaignName);
-  console.log(startDate);
-  console.log(endDate);
-  console.log(os);
+async function getAdvDataFromDB(campaignName, startDate, endDate, os, campaignIds) {
   const [rows] = await pool.query(
     `SELECT pid, pub_id, pub_name, campaign_id, campaign_name, paused_date,shared_date, flag, os
 FROM adv_data
 WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(13), '') =
       REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
+  AND campaign_id IN (?)
   AND DATE(shared_date) BETWEEN ? AND ?
   AND os = ?;`,
-    [campaignName, startDate, endDate, os],
+    [campaignName, campaignIds, startDate, endDate, os],
   );
 
   const pidMap = new Map();
@@ -193,6 +190,7 @@ WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(1
 const handleAdjustUpload = async (req, res) => {
   try {
     const { campaignName, os, geo, dateRange, socketId, event_name } = req.body;
+    const campaignIds = JSON.parse(req.body.campaign_ids || "[]");
     const fullCampaignName = campaignName;
     const baseCampaignName = campaignName.split(",")[0];
 
@@ -220,6 +218,7 @@ const handleAdjustUpload = async (req, res) => {
       startDate,
       endDate,
       os,
+      campaignIds,
     );
 
     // fetch additional 30-days before (same as your previous logic)
@@ -234,6 +233,7 @@ const handleAdjustUpload = async (req, res) => {
       prev30Str,
       startDate,
       os,
+      campaignIds,
     );
     const [configRows] = await pool.query(
       `
@@ -299,33 +299,33 @@ LIMIT 1
 
     // Helper: parse date from various formats. Returns YYYY-MM-DD or null
     const parseDateToISO = (raw) => {
-      if (raw === null || raw === undefined || raw === "") return null;
-
+      if (!raw && raw !== 0) return null;
       raw = String(raw).trim();
-
-      // dd/mm/yy OR dd/mm/yyyy
-      let match = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/);
-
-      if (match) {
-        const dd = match[1].padStart(2, "0");
-        const mm = match[2].padStart(2, "0");
-
-        let yyyy = match[3];
-
-        if (yyyy.length === 2) {
-          yyyy = `20${yyyy}`;
-        }
-
+      // common formats: dd/mm/yyyy or yyyy-mm-dd or dd-mm-yyyy
+      // try dd/mm/yyyy
+      const dmy = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      if (dmy) {
+        const dd = dmy[1].padStart(2, "0");
+        const mm = dmy[2].padStart(2, "0");
+        const yyyy = dmy[3];
         return `${yyyy}-${mm}-${dd}`;
       }
-
-      // yyyy-mm-dd
-      match = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-
-      if (match) {
-        return `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+      // try ISO-like yyyy-mm-dd
+      const iso = raw.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+      if (iso) {
+        const yyyy = iso[1];
+        const mm = String(iso[2]).padStart(2, "0");
+        const dd = String(iso[3]).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
       }
-
+      // fallback try Date parse
+      const d = new Date(raw);
+      if (!isNaN(d)) {
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      }
       return null;
     };
 
@@ -726,10 +726,10 @@ LIMIT 1
           pe: numOrNull(metricCounts.pe.get(pidLower)?.get(date)), // NULL when no value
           pi: numOrNull(metricCounts.pi.get(pidLower)?.get(date)), // NULL when no value
         };
-
+        const finalCampaignId = d.campaign_id ?? campaignIds[0];
         metricsData.push([
           fullCampaignName,
-          d.campaign_id,
+          finalCampaignId,
           d.shared_date,
           os,
           geo,
@@ -834,7 +834,7 @@ WHERE campaign_name = ? AND os = ?
     // Emit socket event if socketId provided
     const io = req.app.get("io");
     if (socketId && io && io.sockets && io.sockets.sockets.get(socketId)) {
-      io.to(socketId).emit("uploadAdjustComplete", {
+      io.to(socketId).emit("uploadComplete", {
         status: "success",
         message: "Upload successful",
         campaignName,

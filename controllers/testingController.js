@@ -1,4 +1,4 @@
-// const db = require("../config/db");
+const db = require("../config/db");
 
 // // POST /api/campaign-publisher-map
 // exports.createCampaignPublisherMap = async (req, res) => {
@@ -320,6 +320,101 @@
 //       success: false,
 //       message: "Internal Server Error",
 //       error: error.message,
+//     });
+//   }
+// };
+
+// exports.getAllPublishers = async (req, res) => {
+//     try {
+//         console.log("🟢 Fetching all publishers...");
+
+//         // ✅ Fetch all data from publids table
+//         const [publishers] = await db.query("SELECT * FROM publids");
+
+//         // ✅ Check if data exists
+//         if (publishers.length === 0) {
+//             return res.status(404).json({ success: false, message: "No publishers found." });
+//         }
+
+//         console.log("✅ Publishers retrieved successfully.");
+//         res.status(200).json({ success: true, data: publishers });
+
+//     } catch (error) {
+//         console.error("❌ Error fetching publishers:", error);
+//         res.status(500).json({ success: false, message: "Internal server error." });
+//     }
+// };
+// exports.getPublishersByCampaign = async (req, res) => {
+//   try {
+//     const { adv_id, campaign_name, os } = req.body;
+
+//     if (!adv_id || !campaign_name || !os) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "adv_id, campaign_name and os are required.",
+//       });
+//     }
+
+//     console.log("Fetching publishers:", {
+//       adv_id,
+//       campaign_name,
+//       os,
+//     });
+
+//     const [rows] = await db.query(
+//       `
+//            SELECT DISTINCT
+//                 p.id,
+//                 p.pub_name,
+//                 p.pub_id,
+//                 p.user_id,
+//                 p.geo,
+//                 p.note,
+//                 p.pause,
+//                 p.target,
+//                 p.level,
+//                 p.vector,
+//                 p.publisher_handle,
+//                 p.postback_url,
+//                 p.api_token,
+//                 p.api_url,
+//                 p.updated_at,
+//                 a.pid,
+//                 a.os,
+//                 a.campaign_name,
+//                 a.adv_id
+//             FROM adv_data a
+//             INNER JOIN publids p
+//                 ON p.pub_id = CAST(a.pub_id AS UNSIGNED)
+//             WHERE a.adv_id = ?
+//               AND a.campaign_name = ?
+//               AND a.os = ?
+
+//               -- Only current month's shared_date
+//               AND MONTH(STR_TO_DATE(a.shared_date, '%Y-%m-%d')) = MONTH(CURDATE())
+//               AND YEAR(STR_TO_DATE(a.shared_date, '%Y-%m-%d')) = YEAR(CURDATE())
+
+//               -- Entry should not be paused
+//               AND (a.paused_date IS NULL OR a.paused_date = '')
+
+//             ORDER BY p.pub_name, a.pid;
+//             `,
+//       [adv_id, campaign_name, os],
+//     );
+//     console.log(
+//       `Fetched ${rows.length} publishers for campaign "${campaign_name}" and OS "${os}".`,
+//     );
+//     console.log("Publisher data sample:", rows.slice(0, 5)); // Log first 5 rows for verification
+//     return res.status(200).json({
+//       success: true,
+//       count: rows.length,
+//       data: rows,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching publishers:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error.",
 //     });
 //   }
 // };

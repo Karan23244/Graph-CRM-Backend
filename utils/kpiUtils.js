@@ -28,11 +28,6 @@ function computeKPIs(agg, eventKeys, provider = "appsflyer") {
   const rti = int(agg.rti);
   const pi = int(agg.pi);
   const impressions = int(agg.impressions);
-  console.log("AGG", {
-    installs: agg.installs,
-    rti: agg.rti,
-    pi: agg.pi,
-  });
   // const kpis = {
   //   clicks,
   //   installs,
