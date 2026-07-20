@@ -418,3 +418,380 @@ const db = require("../config/db");
 //     });
 //   }
 // };
+const updatePublisherEmail = async (connection, pub_id, mail) => {
+  try {
+    if (!mail) return; // skip if no email provided
+
+    await connection.query(`UPDATE pub_accounts SET mail = ? WHERE pubid = ?`, [
+      mail,
+      pub_id,
+    ]);
+
+    console.log("✅ pub_accounts email updated:", mail, pub_id);
+  } catch (err) {
+    console.error("❌ Failed to update pub_accounts email:", err);
+    throw err; // important for transaction rollback
+  }
+};
+
+exports.updatePublisher = async (req, res) => {
+  const connection = await db.getConnection();
+  await connection.beginTransaction();
+
+  try {
+    console.log("🟡 Update Publisher Request Received:", req.body);
+
+    const {
+      pub_name,
+      pub_id,
+      user_id,
+      geo,
+      note,
+      target,
+      level,
+      vector,
+      username,
+      mail,
+      pause,
+      role,
+    } = req.body;
+
+    if (!pub_id || !user_id) {
+      return res
+        .status(400)
+        .json({ success: false, message: "pub_id and user_id are required" });
+    }
+
+    // ✅ Get existing publisher
+    const [existingPublisherRows] = await connection.query(
+      "SELECT * FROM publids WHERE pub_id = ?",
+      [pub_id],
+    );
+
+    if (!existingPublisherRows.length) {
+      connection.release();
+      return res
+        .status(404)
+        .json({ success: false, message: "Publisher not found" });
+    }
+
+    const previous_user_id = existingPublisherRows[0].user_id;
+
+    // ✅ Step 1: Update publisher data
+    const [result] = await connection.query(
+      "UPDATE publids SET pub_name = ?, geo = ?, note = ?, target = ?, user_id = ?, level = ?, vector = ?,pause=? WHERE pub_id = ?",
+      [pub_name, geo, note, target, user_id, level, vector, pause, pub_id],
+    );
+
+    console.log("🔄 Rows affected:", result.affectedRows);
+
+    // ✅ Step 2: Update adv_data (assuming pub_id maps to adv_id or adjust logic as needed)
+    //   await connection.query(
+    //     `UPDATE adv_data SET pub_name = ? WHERE pub_id = ?`,
+    //   [username, pub_id] // if pub_id ≠ adv_id, change this to pub_data logic
+    // );
+    console.log("✅ adv_data Updated Successfully", username, pub_id);
+
+    // ✅ NEW STEP: Update email in pub_accounts
+    await updatePublisherEmail(connection, pub_id, mail);
+
+    // ✅ Step 3: Log the transfer
+    if (previous_user_id !== user_id) {
+      await connection.query(
+        `INSERT INTO adv_transfer_logs (adv_id, from_user_id, to_user_id) VALUES (?, ?, ?)`,
+        [pub_id, previous_user_id, user_id], // again, adjust if it's pub_transfer_logs
+      );
+
+      // ✅ Step 4: Update id_ranges if sub_admin_id matches
+      await connection.query(
+        // `UPDATE id_ranges SET sub_admin_id = ? WHERE sub_admin_id = ?`,
+        `UPDATE id_assignments SET sub_admin_id = ? WHERE single_id = ?`,
+
+        [user_id, pub_id],
+      );
+    }
+    console.log("✅ ID Ranges Updated Successfully");
+
+    await connection.commit();
+    connection.release();
+
+    console.log("✅ Publisher Updated Successfully");
+    res
+      .status(200)
+      .json({ success: true, message: "Publisher updated successfully" });
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    console.error("❌ Server Error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+exports.getPublisherStatus = async (req, res) => {
+  try {
+    const { publisher } = req.query;
+
+    if (!publisher) {
+      return res.status(400).json({
+        success: false,
+        message: "Publisher name is required",
+      });
+    }
+
+    const searchWord = publisher.trim().toLowerCase();
+
+    const query = `
+      SELECT
+          p.pub_id,
+          p.pub_name,
+          p.user_id,
+          l.username,
+          p.pause,
+          CASE
+              WHEN p.pause = '1' THEN 'Paused'
+              ELSE 'Active'
+          END AS status
+      FROM publids p
+      LEFT JOIN login l
+          ON p.user_id = l.id
+      WHERE LOWER(p.pub_name) REGEXP CONCAT('(^|[[:space:]])', ?, '([[:space:]]|$)')
+      LIMIT 1
+    `;
+
+    const [rows] = await db.query(query, [searchWord]);
+
+    if (rows.length === 0) {
+      return res.json({
+        success: true,
+        found: false,
+        message: "Publisher not found",
+      });
+    }
+
+    return res.json({
+      success: true,
+      found: true,
+      data: rows[0],
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error",
+    });
+  }
+};
+
+const getAccessibleUserIds = async (conn, userId) => {
+  try {
+    // =========================================================
+    // 1️⃣ Get current user
+    // =========================================================
+
+    const [[user]] = await conn.query(
+      `SELECT id, role FROM login WHERE id = ? AND pause = 0`,
+      [userId],
+    );
+
+    if (!user) return [];
+
+    const { role } = user;
+
+    // =========================================================
+    //  HELPER: GET FULL HIERARCHY (RECURSIVE)
+    // =========================================================
+    const getAllSubAdmins = async (startIds) => {
+      let allIds = [...startIds];
+      let queue = [...startIds];
+
+      while (queue.length > 0) {
+        const placeholders = queue.map(() => "?").join(",");
+
+        const [rows] = await conn.query(
+          `SELECT sub_admin_id
+             FROM manager_subadmins
+             WHERE manager_id IN (${placeholders})`,
+          queue,
+        );
+
+        const newIds = rows
+          .map((r) => r.sub_admin_id)
+          .filter((id) => !allIds.includes(id));
+
+        if (newIds.length === 0) break;
+
+        allIds.push(...newIds);
+        queue = newIds;
+      }
+
+      return allIds;
+    };
+
+    // =========================================================
+    // ADMIN → FULL ACCESS OF ALL APIS
+    // =========================================================
+    if (role === "admin") {
+      const [allUsers] = await conn.query(
+        `SELECT id FROM login WHERE pause = 0`,
+      );
+      return allUsers.map((u) => u.id);
+    }
+
+    // =========================================================
+    //  MANAGER ROLES → FULL TREE ACCESS
+    // publisher_manager / advertiser_manager
+    // =========================================================
+    if (["publisher_manager", "advertiser_manager"].includes(role)) {
+      const allIds = await getAllSubAdmins([userId]);
+      return [...new Set(allIds)];
+    }
+
+    // =========================================================
+    //  PUBLISHER / ADVERTISER
+    // → self + their executives
+    // =========================================================
+    if (["publisher", "advertiser"].includes(role)) {
+      const allIds = await getAllSubAdmins([userId]);
+      return [...new Set(allIds)];
+    }
+
+    // =========================================================
+    //  EXECUTIVES → ONLY SELF
+    // =========================================================
+    if (["pub_executive", "adv_executive"].includes(role)) {
+      return [userId];
+    }
+
+    // =========================================================
+    //  OPERATIONS / OPTIMIZATION
+    // → self (extend later with assignment table)
+    // =========================================================
+    if (["operations", "optimization"].includes(role)) {
+      return [userId];
+    }
+
+    // =========================================================
+    //  DEFAULT → SAFE FALLBACK FOR ALL
+    // =========================================================
+    return [userId];
+  } catch (err) {
+    console.error("Access Control Error:", err);
+    return [];
+  }
+};
+
+exports.getNamePublishers = async (req, res) => {
+  try {
+    console.log("🟢 Fetching publishers with role-based access...");
+    const { user_id } = req.query;
+    console.log(req.query);
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        message: "user_id is required",
+      });
+    }
+
+    // =========================================================
+    // 🔥 GET ACCESSIBLE USER IDS
+    // =========================================================
+    const accessibleIds = await getAccessibleUserIds(db, user_id);
+
+    console.log("✅ Accessible IDs:", accessibleIds);
+
+    if (!accessibleIds.length) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+      });
+    }
+
+    const placeholders = accessibleIds.map(() => "?").join(",");
+
+    // =========================================================
+    // 🔥 MAIN QUERY (FILTERED)
+    // =====================================================
+    const [publishers] = await db.query(
+      `
+  SELECT
+    p.*,
+ 
+    l.username AS username,
+    l.role     AS user_role,
+ 
+    pa.username AS publisher_username,
+    pa.role     AS publisher_role,
+    pa.act_pass AS password,
+    pa.mail     AS mail,
+    pa.id       AS publisher_login_id,
+ 
+    -- ✅ Billing as JSON array (clean + no null objects)
+    COALESCE(
+      JSON_ARRAYAGG(
+        CASE
+          WHEN pbd.id IS NOT NULL THEN JSON_OBJECT(
+            'id', pbd.id,
+            'legal_name', pbd.legal_name,
+            'billing_address', pbd.billing_address,
+            'tax_type', pbd.tax_type,
+            'tax_id', pbd.tax_id,
+            'user_id', pbd.user_id,
+            'created_at', pbd.created_at,
+            'updated_at', pbd.updated_at
+          )
+        END
+      ),
+      JSON_ARRAY()
+    ) AS billing_details
+ 
+  FROM publids p
+ 
+  LEFT JOIN login l
+    ON p.user_id = l.id
+ 
+  LEFT JOIN pub_accounts pa
+    ON pa.pubid = p.pub_id
+ 
+  LEFT JOIN publisher_billing_details pbd
+    ON pbd.pub_id = p.pub_id
+ 
+  WHERE p.user_id IN (${placeholders})
+ 
+  GROUP BY
+    p.pub_id,
+    p.id,
+    l.username,
+    l.role,
+    pa.username,
+    pa.role,
+    pa.act_pass,
+    pa.mail,
+    pa.id
+  `,
+      accessibleIds,
+    );
+    console.log(publishers[0]);
+    //  console.log("Current User:", user);
+    console.log("Accessible IDs Count:", accessibleIds.length);
+    console.log("First 20 IDs:", accessibleIds.slice(0, 20));
+    if (publishers.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No publishers found.",
+      });
+    }
+
+    console.log("✅ Publishers retrieved successfully.");
+    return res.status(200).json({
+      success: true,
+      data: publishers,
+    });
+  } catch (error) {
+    console.error("❌ Error fetching publishers:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error.",
+    });
+  }
+};

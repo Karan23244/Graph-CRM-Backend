@@ -153,15 +153,16 @@ const normalizePid = (val) =>
 // ---------------------------
 // Fetch adv_data by campaign + dateRange
 // ---------------------------
-async function getAdvDataFromDB(campaignName, startDate, endDate, os) {
+async function getAdvDataFromDB(campaignName, startDate, endDate, os, campaignIds) {
   const [rows] = await pool.query(
     `SELECT pid, pub_id, pub_name,  campaign_id, campaign_name, paused_date,shared_date, flag, os
 FROM adv_data
 WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(13), '') =
       REPLACE(REPLACE(REPLACE(?, CHAR(9), ''), CHAR(10), ''), CHAR(13), '')
+  AND campaign_id IN (?)
   AND DATE(shared_date) BETWEEN ? AND ?
   AND os = ?;`,
-    [campaignName, startDate, endDate, os],
+    [campaignName, campaignIds, startDate, endDate, os],
   );
 
   const pidMap = new Map();
@@ -192,6 +193,7 @@ WHERE REPLACE(REPLACE(REPLACE(campaign_name, CHAR(9), ''), CHAR(10), ''), CHAR(1
 const handlesingularUpload = async (req, res) => {
   try {
     const { campaignName, os, geo, dateRange, socketId, event_name } = req.body;
+    const campaignIds = JSON.parse(req.body.campaign_ids || "[]");
     const fullCampaignName = campaignName;
     const baseCampaignName = campaignName.split(",")[0];
 
@@ -217,6 +219,7 @@ const handlesingularUpload = async (req, res) => {
       startDate,
       endDate,
       os,
+      campaignIds,
     );
 
     // fetch additional 30-days before (same as your previous logic)
@@ -228,6 +231,7 @@ const handlesingularUpload = async (req, res) => {
       prev30Str,
       startDate,
       os,
+      campaignIds,
     );
     const [configRows] = await pool.query(
       `

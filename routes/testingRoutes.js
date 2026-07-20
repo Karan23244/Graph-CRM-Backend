@@ -8,4 +8,7 @@ const campaignPublisherMapController = require("../controllers/testingController
 // router.delete("/campaign-publisher-map/:access_id", campaignPublisherMapController.deleteCampaignPublisherMap);
 // router.get("/getassigncampaign",    campaignPublisherMapController.getAssignCampaign);
 // router.post("/get-allpub", campaignPublisherMapController.getPublishersByCampaign);
+router.post("/update-pubid", campaignPublisherMapController.updatePublisher);
+router.get("/publisher-status", campaignPublisherMapController.getPublisherStatus);
+router.get("/get-Namepub", campaignPublisherMapController.getNamePublishers)
 module.exports = router

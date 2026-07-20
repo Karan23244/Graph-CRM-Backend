@@ -148,7 +148,13 @@ async function batchInsert(sql, data, batchSize = 500) {
 // ---------------------------
 // Fetch adv_data by campaign + dateRange
 // ---------------------------
-async function getAdvDataFromDB(campaignName, startDate, endDate, os, campaignIds) {
+async function getAdvDataFromDB(
+  campaignName,
+  startDate,
+  endDate,
+  os,
+  campaignIds,
+) {
   const [rows] = await pool.query(
     `SELECT pid, pub_id, pub_name, campaign_id, campaign_name, paused_date,shared_date, flag, os
 FROM adv_data
@@ -303,11 +309,19 @@ LIMIT 1
       raw = String(raw).trim();
       // common formats: dd/mm/yyyy or yyyy-mm-dd or dd-mm-yyyy
       // try dd/mm/yyyy
-      const dmy = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+      const dmy = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2}|\d{4})$/);
+
       if (dmy) {
         const dd = dmy[1].padStart(2, "0");
         const mm = dmy[2].padStart(2, "0");
-        const yyyy = dmy[3];
+
+        let yyyy = dmy[3];
+
+        // Convert 2-digit year to 4-digit
+        if (yyyy.length === 2) {
+          yyyy = `20${yyyy}`;
+        }
+
         return `${yyyy}-${mm}-${dd}`;
       }
       // try ISO-like yyyy-mm-dd
@@ -419,7 +433,21 @@ LIMIT 1
 
           // if date is number → Excel serial date, convert it
           let metricsDate = null;
-          let rawDay = row["day"];
+          let rawDay = dayKey ? row[dayKey] : null;
+
+          if (rawDay instanceof Date) {
+            metricsDate = rawDay.toISOString().slice(0, 10);
+          } else if (!isNaN(rawDay) && Number(rawDay) > 40000) {
+            metricsDate = excelSerialToDate(Number(rawDay))
+              .toISOString()
+              .slice(0, 10);
+          } else if (!isNaN(rawDay)) {
+            metricsDate = null;
+          } else {
+            metricsDate = parseDateToISO(rawDay);
+          }
+
+          if (!metricsDate) metricsDate = startDate;
 
           // 1) If numeric AND looks like Excel serial (>40000)
           if (!isNaN(rawDay) && Number(rawDay) > 40000) {

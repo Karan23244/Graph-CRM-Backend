@@ -30,7 +30,7 @@ function classifyPID(row, clicksPerDay, installsPerDay) {
     invalidValues.includes(pubam) || invalidValues.includes(pubid);
 
   if (isMissing) {
-    return "black";
+    return "violet";
   }
 
   // Current totals
@@ -46,23 +46,26 @@ function classifyPID(row, clicksPerDay, installsPerDay) {
 
   // Gold → Traffic + Active
   if (hasTraffic && !isPaused) {
-    return "gold";
+    return "green";
   }
 
   // Blue → No Traffic + Active
   if (!hasTraffic && !isPaused) {
-    return "blue";
+    return "orange";
   }
-
+  // Blue → No Traffic + Active
+  if (!hasTraffic && isPaused) {
+    return "red";
+  }
   // Purple → Traffic + Paused
   if (hasTraffic && isPaused) {
-    return "purple";
+    return "yellow";
   }
 
   // Remaining case:
   // No Traffic + Paused
   // Returning black because only 4 colors requested
-  return "black";
+  return "red";
 }
 
 module.exports = { classifyPID };

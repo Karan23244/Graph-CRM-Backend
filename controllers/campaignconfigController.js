@@ -283,13 +283,14 @@ exports.getConfiguredCampaigns = async (req, res) => {
 
           geos = geoRows.map((item) => item.geo);
         }
-
+        
         return campaignNames.map((campaignName) => ({
           config_id: row.id,
           campaign_name: campaignName,
           campaign_ids: campaignIds,
           total_campaign_ids: campaignIds.length,
           geos, // <-- Added
+          config_type: row.config_type,
           os: row.os,
           created_at: row.created_at,
           updated_at: row.updated_at,

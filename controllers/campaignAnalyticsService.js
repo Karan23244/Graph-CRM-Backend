@@ -497,6 +497,7 @@ async function getCampaignAnalytics(payload) {
       pid,
       pubid: row.pubid,
       pubam: row.pubam,
+      is_paused: row.is_paused,
       pid_color: pidColor,
       total_impressions: row.total_impressions || 0,
       mtd: coloredMtd,
@@ -598,6 +599,7 @@ function buildEventAgg(eventMap, pidEvents = {}, windowPrefix) {
 
 function flattenRow({
   campaign_id,
+  is_paused,
   pid,
   pubid,
   pubam,
@@ -615,6 +617,7 @@ function flattenRow({
     pid,
     pubid,
     pubam,
+    is_paused,
     pid_color,
   };
   row.impressions = Number(total_impressions) || 0;
