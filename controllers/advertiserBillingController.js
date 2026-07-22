@@ -157,12 +157,15 @@ CAST(adv_payout AS DECIMAL(10,2))
           payable_event,
           pid,
           TRIM(
-  REPLACE(
-    REPLACE(
-      REPLACE(vertical, CHAR(13), ''),
-    CHAR(10), ''),
-  CHAR(9), '')
-) AS vertical
+            REPLACE(
+              REPLACE(
+                REPLACE(vertical, CHAR(13), ''),
+                CHAR(10), ''
+              ),
+              CHAR(9), ''
+            )
+          ) AS vertical,
+
           CAST(adv_payout AS DECIMAL(10,2)) AS adv_payout,
 
            SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS total_no,
