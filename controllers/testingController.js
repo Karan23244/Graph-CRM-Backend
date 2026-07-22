@@ -795,3 +795,165 @@ exports.getNamePublishers = async (req, res) => {
     });
   }
 };
+
+// app.post("/addPubRequestnew", async (req, res) => {
+//   try {
+//     const {
+//       adv_name,
+//       campaign_name,
+//       payout,
+//       os,
+//       pub_name,
+//       pub_id,
+//       pid,
+//       geo,
+//       note,
+//       adv_am,
+//     } = req.body;
+
+//     const io = req.app.locals.io;
+//     let insertedIds = [];
+
+//     // Normalize arrays
+//     const payoutArr = Array.isArray(payout) ? payout : [payout];
+//     const geoArr = Array.isArray(geo) ? geo : [geo];
+//     const osArr = Array.isArray(os) ? os : [os];
+
+//     // Look up adv_name in login table once — used for campaign_ids lookup below
+//     const [[loginRow]] = await db.query(
+//       "SELECT id FROM login WHERE username = ? LIMIT 1",
+//       [adv_am],
+//     );
+//     const advUserId = loginRow?.id || null;
+
+//     // We loop based on payout/geo length (main rows)
+//     for (let i = 0; i < payoutArr.length; i++) {
+//       // ----- Normalize OS for this row -----
+//       let thisOS = osArr[i] || osArr[0];
+//       let rowOsList = [];
+
+//       if (thisOS === "both") {
+//         rowOsList = ["Android", "iOS"];
+//       } else if (Array.isArray(thisOS)) {
+//         rowOsList = thisOS;
+//       } else {
+//         rowOsList = [thisOS];
+//       }
+
+//       // ----- Normalize GEO for this row -----
+//       let thisGeo = geoArr[i] || geoArr[0];
+//       if (!Array.isArray(thisGeo)) thisGeo = [thisGeo];
+
+//       let thisPayout = payoutArr[i] || payoutArr[0];
+
+//       // Now create entries for each OS of this row
+//       for (let j = 0; j < rowOsList.length; j++) {
+//         const finalOS = rowOsList[j];
+
+//         // Find matching campaign IDs from campaign_data
+//         // finalOS is always a single value here ("Android"/"iOS") since "both" is already expanded above
+//         let campaignIds = [];
+
+//         const getCampaignIds = async (osName) => {
+//           let ids = [];
+
+//           // First try using login.user_id
+//           if (advUserId) {
+//             const [campaigns] = await db.query(
+//               `SELECT id FROM campaign_data
+//        WHERE campaign_name = ? AND os = ? AND user_id = ?`,
+//               [campaign_name, osName, advUserId],
+//             );
+
+//             ids = campaigns.map((c) => c.id);
+//           }
+
+//           // Fallback using advids.assign_id
+//           if (ids.length === 0) {
+//             const [[advRow]] = await db.query(
+//               `SELECT assign_id FROM advids WHERE adv_name = ? LIMIT 1`,
+//               [adv_name],
+//             );
+
+//             if (advRow?.assign_id) {
+//               const [campaigns] = await db.query(
+//                 `SELECT id FROM campaign_data
+//          WHERE campaign_name = ? AND os = ? AND user_id = ?`,
+//                 [campaign_name, osName, advRow.assign_id],
+//               );
+
+//               ids = campaigns.map((c) => c.id);
+//             }
+//           }
+
+//           return ids;
+//         };
+
+//         if (thisOS === "both") {
+//           let androidIds = await getCampaignIds("Android");
+//           let iosIds = await getCampaignIds("iOS");
+
+//           // Copy IDs if one side is missing
+//           if (androidIds.length === 0 && iosIds.length > 0) {
+//             androidIds = [...iosIds];
+//           }
+
+//           if (iosIds.length === 0 && androidIds.length > 0) {
+//             iosIds = [...androidIds];
+//           }
+
+//           campaignIds = finalOS === "Android" ? androidIds : iosIds;
+//         } else {
+//           campaignIds = await getCampaignIds(finalOS);
+//         }
+
+//         const [result] = await db.query(
+//           `INSERT INTO pub_req
+//           (adv_name, campaign_name, payout, os, pub_name, pub_id, pid, geo, note, campaign_ids)
+//           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+//           [
+//             adv_name,
+//             campaign_name,
+//             thisPayout,
+//             finalOS,
+//             pub_name,
+//             pub_id,
+//             pid,
+//             JSON.stringify(thisGeo),
+//             note,
+//             JSON.stringify(campaignIds),
+//           ],
+//         );
+
+//         insertedIds.push(result.insertId);
+
+//         // Real-time Emit
+//         io.emit("pub_request_added", {
+//           id: result.insertId,
+//           adv_name,
+//           campaign_name,
+//           payout: thisPayout,
+//           os: finalOS,
+//           pub_name,
+//           pub_id,
+//           pid,
+//           geo: thisGeo,
+//           note,
+//         });
+//       }
+//     }
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Pub request processed successfully",
+//       inserted_ids: insertedIds,
+//     });
+//   } catch (error) {
+//     console.error("❌ Error in addPubRequest:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// });

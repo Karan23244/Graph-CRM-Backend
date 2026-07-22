@@ -114,7 +114,13 @@ exports.getAdvertiserBillingData = async (req, res) => {
         SELECT
           TRIM(campaign_name) AS campaign_name,
           TRIM(geo) AS geo,
-          TRIM(vertical) AS vertical,
+TRIM(
+  REPLACE(
+    REPLACE(
+      REPLACE(vertical, CHAR(13), ''),
+    CHAR(10), ''),
+  CHAR(9), '')
+) AS vertical,
           GROUP_CONCAT(DISTINCT TRIM(os)) AS os,
           payable_event,
           CAST(adv_payout AS DECIMAL(10,2)) AS adv_payout,
@@ -126,10 +132,18 @@ exports.getAdvertiserBillingData = async (req, res) => {
         WHERE adv_id = ?
           AND shared_date LIKE CONCAT(?, '%')
 
-        GROUP BY TRIM(campaign_name),
-        TRIM(geo),
-        TRIM(vertical),
-        payable_event, CAST(adv_payout AS DECIMAL(10,2))
+GROUP BY
+TRIM(campaign_name),
+TRIM(geo),
+TRIM(
+  REPLACE(
+    REPLACE(
+      REPLACE(vertical, CHAR(13), ''),
+    CHAR(10), ''),
+  CHAR(9), '')
+),
+payable_event,
+CAST(adv_payout AS DECIMAL(10,2))
         `,
         [adv_id, month],
       );
@@ -142,7 +156,13 @@ exports.getAdvertiserBillingData = async (req, res) => {
           TRIM(os) AS os,
           payable_event,
           pid,
-          TRIM(vertical) AS vertical,
+          TRIM(
+  REPLACE(
+    REPLACE(
+      REPLACE(vertical, CHAR(13), ''),
+    CHAR(10), ''),
+  CHAR(9), '')
+) AS vertical
           CAST(adv_payout AS DECIMAL(10,2)) AS adv_payout,
 
            SUM(CAST(adv_total_no AS DECIMAL(12,2))) AS total_no,
@@ -155,7 +175,13 @@ exports.getAdvertiserBillingData = async (req, res) => {
 
         GROUP BY TRIM(campaign_name),
         TRIM(geo),
-        TRIM(vertical),
+TRIM(
+  REPLACE(
+    REPLACE(
+      REPLACE(vertical, CHAR(13), ''),
+    CHAR(10), ''),
+  CHAR(9), '')
+),
         TRIM(os), payable_event, CAST(adv_payout AS DECIMAL(10,2)), pid
         `,
         [adv_id, month],

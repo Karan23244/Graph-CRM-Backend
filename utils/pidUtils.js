@@ -51,7 +51,7 @@ function classifyPID(row, clicksPerDay, installsPerDay) {
 
   // Blue → No Traffic + Active
   if (!hasTraffic && !isPaused) {
-    return "orange";
+    return "yellow";
   }
   // Blue → No Traffic + Active
   if (!hasTraffic && isPaused) {
@@ -59,7 +59,7 @@ function classifyPID(row, clicksPerDay, installsPerDay) {
   }
   // Purple → Traffic + Paused
   if (hasTraffic && isPaused) {
-    return "yellow";
+    return "orange";
   }
 
   // Remaining case:
