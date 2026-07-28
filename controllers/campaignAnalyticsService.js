@@ -82,7 +82,16 @@ async function fetchMetricsAllWindows(
       cm.pubam,
       cm.pubid,
       cm.pid,
-     MAX(cm.is_paused) AS is_paused,
+    (
+    SELECT cm2.is_paused
+    FROM campaign_metrics_new cm2
+    WHERE cm2.campaign_id = cm.campaign_id
+      AND cm2.pid = cm.pid
+      AND cm2.pubid = cm.pubid
+      AND cm2.os = cm.os
+    ORDER BY cm2.id DESC
+    LIMIT 1
+) AS is_paused,
 SUM(
   CASE
     WHEN DATE(cm.metrics_date) BETWEEN ? AND ?
@@ -202,8 +211,8 @@ SUM(
     secondary.end,
     secondary.start,
     secondary.end,
-    primary.start,
-    primary.end,
+    secondary.start,
+    secondary.end,
     // WHERE
     campaignName,
     os,
@@ -213,7 +222,6 @@ SUM(
   ];
 
   const [rows] = await db.execute(sql, params);
-
   return rows;
 }
 // ─────────────────────────────────────────────
@@ -365,7 +373,6 @@ async function getCampaignAnalytics(payload) {
     primaryDays,
     secondaryDays,
   );
-
   // ── Step 3 & 4: DB queries (parallel) ───────────────────────────────────
   const [metricsRows, eventMap_db] = await Promise.all([
     fetchMetricsAllWindows(campaign_name, os, geo, campaign_ids, windows),
@@ -384,50 +391,14 @@ async function getCampaignAnalytics(payload) {
   }
 
   // ── Step 5 → 8: Per-PID assembly ────────────────────────────────────────
-  const filteredRows = metricsRows.filter((row) => {
-    const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
-
-    const hasMetricData =
-      Number(row.mtd_clicks || 0) > 0 ||
-      Number(row.mtd_installs || 0) > 0 ||
-      Number(row.mtd_rti || 0) > 0 ||
-      Number(row.mtd_pi || 0) > 0 ||
-      Number(row.primary_clicks || 0) > 0 ||
-      Number(row.primary_installs || 0) > 0 ||
-      Number(row.primary_rti || 0) > 0 ||
-      Number(row.primary_pi || 0) > 0 ||
-      Number(row.secondary_clicks || 0) > 0 ||
-      Number(row.secondary_installs || 0) > 0 ||
-      Number(row.secondary_rti || 0) > 0 ||
-      Number(row.secondary_pi || 0) > 0;
-
-    const hasEventData =
-      eventMap_db[pidKey] &&
-      Object.values(eventMap_db[pidKey]).some((event) =>
-        ["mtd", "primary", "secondary"].some(
-          (win) => (event[win]?.noe || 0) > 0 || (event[win]?.pe || 0) > 0,
-        ),
-      );
-
-    if (Number(row.is_paused) === 0) {
-      return true;
-    }
-
-    return hasMetricData || hasEventData;
-  });
+  const filteredRows = metricsRows.filter(() => true);
   const result = filteredRows.map((row) => {
     const pid = row.pid;
     const pidKey = `${row.campaign_id}_${row.pid}_${os}`;
 
     // Build aggregation objects per window
     const buildAgg = (prefix) => {
-      console.log(prefix, {
-        installs: row[`${prefix}_installs`],
-        rti: row[`${prefix}_rti`],
-        pi: row[`${prefix}_pi`],
-      });
-
-      return {
+      const agg = {
         clicks: row[`${prefix}_clicks`] || 0,
         impressions: row[`${prefix}_impressions`] || 0,
         installs: row[`${prefix}_installs`] || 0,
@@ -435,6 +406,8 @@ async function getCampaignAnalytics(payload) {
         pi: row[`${prefix}_pi`] || 0,
         events: buildEventAgg(eventMap, eventMap_db[pidKey], prefix),
       };
+
+      return agg;
     };
 
     const aggMtd = buildAgg("mtd");

@@ -1010,8 +1010,13 @@ const handleUpload = async (req, res) => {
       }
 
       // If no dates found, still insert one zero row for startDate (baseline)
+      // If no metrics found, use shared_date as metrics_date
       if (allDates.size === 0) {
-        allDates.add(startDate); // ensures pid stored even with 0 data
+        if (d.shared_date) {
+          allDates.add(formatLocalDate(new Date(d.shared_date)));
+        } else {
+          allDates.add(startDate); // fallback if shared_date is null
+        }
       }
 
       // loop through all dates for this pid
