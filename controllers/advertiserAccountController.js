@@ -108,13 +108,30 @@ exports.getAdvertiserAccount = async (req, res) => {
     if (role.includes("admin") || role.includes("accounts")) {
       const [result] = await pool.query(
         `
-        SELECT 
-          aa.*,
-          ad.adv_name,
-          ad.note
-          FROM advertiser_account aa
-          LEFT JOIN advids ad ON aa.adv_id = ad.adv_id
+        SELECT
+            aa.*,
+            ad.adv_name,
+            ad.note,
+            l.username AS adv_am,
+
+            abd.legal_name,
+            abd.billing_address,
+            abd.tax_type,
+            abd.tax_id
+
+        FROM advertiser_account aa
+
+        LEFT JOIN advids ad
+            ON aa.adv_id = ad.adv_id
+
+        LEFT JOIN login l
+            ON ad.user_id = l.id
+
+        LEFT JOIN advertiser_billing_details abd
+            ON aa.adv_id = abd.adv_id
+
         ${month ? "WHERE aa.month = ?" : ""}
+
         ORDER BY aa.month DESC
       `,
         month ? [month] : [],
@@ -129,19 +146,35 @@ exports.getAdvertiserAccount = async (req, res) => {
 
       const [result] = await pool.query(
         `
-  SELECT
-    aa.*,
-    ad.adv_name,
-    ad.note
-  FROM advertiser_account aa
-  LEFT JOIN advids ad
-    ON aa.adv_id = ad.adv_id
-  WHERE (
-    ad.user_id IN (?)
-    OR ad.assign_id IN (?)
-  )
-  ${month ? "AND aa.month = ?" : ""}
-  ORDER BY aa.month DESC
+          SELECT
+              aa.*,
+              ad.adv_name,
+              ad.note,
+              l.username AS adv_am,
+
+              abd.legal_name,
+              abd.billing_address,
+              abd.tax_type,
+              abd.tax_id
+
+          FROM advertiser_account aa
+
+          LEFT JOIN advids ad
+              ON aa.adv_id = ad.adv_id
+
+          LEFT JOIN login l
+              ON ad.user_id = l.id
+
+          LEFT JOIN advertiser_billing_details abd
+              ON aa.adv_id = abd.adv_id
+
+          WHERE (
+              ad.user_id IN (?)
+              OR ad.assign_id IN (?)
+          )
+          ${month ? "AND aa.month = ?" : ""}
+
+          ORDER BY aa.month DESC
   `,
         month
           ? [allowedUsers, allowedUsers, month]
@@ -155,14 +188,31 @@ exports.getAdvertiserAccount = async (req, res) => {
     else if (role.includes("advertiser")) {
       const [result] = await pool.query(
         `
-        SELECT 
-          aa.*,
-          ad.adv_name,
-          ad.note
-          FROM advertiser_account aa
-        LEFT JOIN advids ad ON aa.adv_id = ad.adv_id
+        SELECT
+            aa.*,
+            ad.adv_name,
+            ad.note,
+            l.username AS adv_am,
+
+            abd.legal_name,
+            abd.billing_address,
+            abd.tax_type,
+            abd.tax_id
+
+        FROM advertiser_account aa
+
+        LEFT JOIN advids ad
+            ON aa.adv_id = ad.adv_id
+
+        LEFT JOIN login l
+            ON ad.user_id = l.id
+
+        LEFT JOIN advertiser_billing_details abd
+            ON aa.adv_id = abd.adv_id
+
         WHERE ad.user_id = ?
         ${month ? "AND aa.month = ?" : ""}
+
         ORDER BY aa.month DESC
       `,
         month ? [user_id, month] : [user_id],
