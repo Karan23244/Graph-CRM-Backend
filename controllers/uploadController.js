@@ -537,10 +537,10 @@ const handleUpload = async (req, res) => {
     for (const d of advData) advPidMap.set(d.pidLower, d);
     // ✅ Step 4: Collect all PIDs that appear in uploaded files
     const filePids = new Set();
-    if (!advData.length)
-      return res
-        .status(400)
-        .json({ msg: "No valid PID entries found in adv_data." });
+    // if (!advData.length)
+    //   return res
+    //     .status(400)
+    //     .json({ msg: "No valid PID entries found in adv_data." });
 
     const metricCounts = {
       noi: new Map(),
@@ -834,21 +834,86 @@ const handleUpload = async (req, res) => {
           const pid = mediaSourceKey
             ? (row[mediaSourceKey] || "").trim().toLowerCase()
             : null;
+
           if (!pid) return;
 
           const installTimeRaw = installTimeKey ? row[installTimeKey] : null;
-          const dateVal = installTimeRaw ? new Date(installTimeRaw) : null;
-          if (!dateVal || isNaN(dateVal)) return;
+
+          console.log(
+            `📅 [NOI] Extracted install time for PID=${pid} → raw="${installTimeRaw}"`,
+          );
+
+          if (!installTimeRaw) return;
+
+          // Expected format: DD/MM/YY HH:mm
+          const match = String(installTimeRaw)
+            .trim()
+            .match(
+              /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2}))?$/,
+            );
+
+          if (!match) {
+            console.log(
+              `❌ [NOI] Invalid install time for PID=${pid} → raw="${installTimeRaw}"`,
+            );
+            return;
+          }
+
+          let [, day, month, year, hours = "0", minutes = "0"] = match;
+
+          day = Number(day);
+          month = Number(month);
+          year = Number(year);
+          hours = Number(hours);
+          minutes = Number(minutes);
+
+          // Convert YY → YYYY
+          if (year < 100) {
+            year += 2000;
+          }
+
+          // IMPORTANT: DD/MM/YYYY
+          const dateVal = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+          console.log(
+            `📅 [NOI] Parsed install time for PID=${pid} → dateVal="${dateVal.toString()}"`,
+          );
+
+          if (
+            isNaN(dateVal.getTime()) ||
+            dateVal.getFullYear() !== year ||
+            dateVal.getMonth() !== month - 1 ||
+            dateVal.getDate() !== day
+          ) {
+            console.log(
+              `❌ [NOI] Invalid parsed date for PID=${pid} → raw="${installTimeRaw}"`,
+            );
+            return;
+          }
 
           const metricsDate = `${dateVal.getFullYear()}-${String(
             dateVal.getMonth() + 1,
           ).padStart(2, "0")}-${String(dateVal.getDate()).padStart(2, "0")}`;
 
+          // Pass the RAW VALUE, not row[installTimeRaw]
+          const installTimeFormatted = formatEventDateTime(installTimeRaw);
+
+          console.log(
+            `📅 [NOI] Formatted install time for PID=${pid} → metricsDate="${metricsDate}", installTimeFormatted="${installTimeFormatted}"`,
+          );
+
           // Count 1 install per row
           incIfPidDate(metricCounts.noi, pid, metricsDate, 1);
-          setNestedDate(rawDateStore.install, pid, metricsDate, installTimeRaw);
-          // Debug log
+
+          setNestedDate(
+            rawDateStore.install,
+            pid,
+            metricsDate,
+            installTimeFormatted,
+          );
+
           console.log(`📊 [NOI] PID=${pid}, date=${metricsDate}, +1`);
+
           return;
         }
 
