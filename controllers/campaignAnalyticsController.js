@@ -4,7 +4,6 @@ const analyticsService = require("./campaignAnalyticsService");
 
 exports.getCampaignAnalytics = async (req, res) => {
   try {
-
     const result = await analyticsService.getCampaignAnalytics(req.body);
 
     return res.status(200).json({
@@ -136,17 +135,24 @@ exports.getUniqueCampaigns = async (req, res) => {
 
         const [metricRows] = await db.query(
           `
-    SELECT DISTINCT
+  SELECT DISTINCT
       geo,
-      COALESCE(clicks_date, metrics_date) AS metric_date
-    FROM campaign_metrics_new
-    WHERE campaign_id IN (${placeholders})
-      AND (
-        (geo IS NOT NULL AND geo != '')
-        OR COALESCE(clicks_date, metrics_date) IS NOT NULL
+      COALESCE(clicks_date, metrics_date, shared_date) AS metric_date
+  FROM campaign_metrics_new
+  WHERE (
+      campaign_id IN (${placeholders})
+      OR (
+          (campaign_id = 'N/A' OR campaign_id IS NULL OR campaign_id = '')
+          AND campaign_name = ?
+          AND os = ?
       )
-    `,
-          campaignIds,
+  )
+  AND (
+      (geo IS NOT NULL AND geo != '')
+      OR COALESCE(clicks_date, metrics_date, shared_date) IS NOT NULL
+  )
+  `,
+          [...campaignIds, campaignName, row.os],
         );
 
         geos = [...new Set(metricRows.map((row) => row.geo).filter(Boolean))];
@@ -215,24 +221,25 @@ exports.deleteCampaignData = async (req, res) => {
 
     const [metricRows] = await connection.execute(
       `
-      SELECT cm.id
-      FROM campaign_metrics_new cm
-      WHERE LOWER(cm.campaign_name) = LOWER(?)
-        AND LOWER(cm.os) = LOWER(?)
-
-        AND DATE(cm.metrics_date) BETWEEN DATE(?) AND DATE(?)
-
-        AND (
-          cm.campaign_id IN (${campaignPlaceholders || "NULL"})
-          OR (
-            (cm.campaign_id IS NULL OR cm.campaign_id = '')
-            AND (${geoCondition})
-          )
+  SELECT cm.id
+  FROM campaign_metrics_new cm
+  WHERE LOWER(cm.campaign_name) = LOWER(?)
+    AND LOWER(cm.os) = LOWER(?)
+    AND DATE(cm.metrics_date) BETWEEN DATE(?) AND DATE(?)
+    AND (
+      cm.campaign_id IN (${campaignPlaceholders || "NULL"})
+      OR (
+        (
+          cm.campaign_id IS NULL
+          OR TRIM(cm.campaign_id) = ''
+          OR UPPER(TRIM(cm.campaign_id)) = 'N/A'
         )
-      `,
+        AND (${geoCondition})
+      )
+    )
+  `,
       queryParams,
     );
-
     if (!metricRows.length) {
       await connection.rollback();
 
