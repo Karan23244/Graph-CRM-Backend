@@ -537,10 +537,10 @@ const handleUpload = async (req, res) => {
     for (const d of advData) advPidMap.set(d.pidLower, d);
     // ✅ Step 4: Collect all PIDs that appear in uploaded files
     const filePids = new Set();
-    if (!advData.length)
-      return res
-        .status(400)
-        .json({ msg: "No valid PID entries found in adv_data." });
+    // if (!advData.length)
+    //   return res
+    //     .status(400)
+    //     .json({ msg: "No valid PID entries found in adv_data." });
 
     const metricCounts = {
       noi: new Map(),
@@ -825,28 +825,80 @@ const handleUpload = async (req, res) => {
           }
           return;
         }
+        function parseDate(value) {
+          if (!value) return null;
 
+          value = String(value).trim();
+
+          // YYYY-MM-DD HH:mm:ss
+          let m = value.match(
+            /^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/,
+          );
+
+          if (m) {
+            const [, y, mo, d, h, mi, s = "0"] = m;
+
+            return new Date(
+              Number(y),
+              Number(mo) - 1,
+              Number(d),
+              Number(h),
+              Number(mi),
+              Number(s),
+            );
+          }
+
+          // DD/MM/YYYY HH:mm
+          m = value.match(
+            /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})$/,
+          );
+
+          if (m) {
+            let [, d, mo, y, h, mi] = m;
+
+            if (+y < 100) y = String(+y + 2000);
+
+            return new Date(
+              Number(y),
+              Number(mo) - 1,
+              Number(d),
+              Number(h),
+              Number(mi),
+            );
+          }
+
+          return null;
+        }
         if (metricName === "noi") {
           // Use Media Source + Install Time
           const mediaSourceKey = headers.find((c) => /media\s*source/i.test(c));
           const installTimeKey = headers.find((c) => c === "installtime");
-
           const pid = mediaSourceKey
             ? (row[mediaSourceKey] || "").trim().toLowerCase()
             : null;
           if (!pid) return;
 
           const installTimeRaw = installTimeKey ? row[installTimeKey] : null;
-          const dateVal = installTimeRaw ? new Date(installTimeRaw) : null;
+          console.log(
+            `📅 [NOI] PID=${pid}, raw install time="${installTimeRaw}"`,
+          );
+          const dateVal = parseDate(installTimeRaw);
           if (!dateVal || isNaN(dateVal)) return;
-
+          const installTimeFormatted = formatEventDateTime(installTimeRaw);
           const metricsDate = `${dateVal.getFullYear()}-${String(
             dateVal.getMonth() + 1,
           ).padStart(2, "0")}-${String(dateVal.getDate()).padStart(2, "0")}`;
-
+          console.log(
+            `📅 [NOI] PID=${pid}, raw install time="${installTimeRaw}" → formatted="${installTimeFormatted}" → metricsDate=${metricsDate}`,
+          );
           // Count 1 install per row
           incIfPidDate(metricCounts.noi, pid, metricsDate, 1);
-          setNestedDate(rawDateStore.install, pid, metricsDate, installTimeRaw);
+          setNestedDate(
+            rawDateStore.install,
+            pid,
+            metricsDate,
+            installTimeFormatted,
+          );
           // Debug log
           console.log(`📊 [NOI] PID=${pid}, date=${metricsDate}, +1`);
           return;
