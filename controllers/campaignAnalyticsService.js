@@ -82,6 +82,7 @@ async function fetchMetricsAllWindows(
       cm.pubam,
       cm.pubid,
       cm.pid,
+      MAX(cm.shared_date) AS shared_date,
     (
     SELECT cm2.is_paused
     FROM campaign_metrics_new cm2
@@ -112,11 +113,57 @@ SUM(
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS mtd_installs,
 
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-          BETWEEN ? AND ? THEN cm.rti ELSE 0 END) AS mtd_rti,
+      CASE
+        WHEN
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN IFNULL(cm.rti, 0)
+                ELSE 0
+              END) = 0
+          AND
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                    AND cm.rti IS NULL
+                THEN 1
+                ELSE 0
+              END) > 0
+        THEN NULL
+        ELSE
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN cm.rti
+                ELSE 0
+              END)
+      END AS mtd_rti,
 
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-          BETWEEN ? AND ? THEN cm.pi ELSE 0 END) AS mtd_pi,
+      CASE
+        WHEN
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN IFNULL(cm.pi, 0)
+                ELSE 0
+              END) = 0
+          AND
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                    AND cm.pi IS NULL
+                THEN 1
+                ELSE 0
+              END) > 0
+        THEN NULL
+        ELSE
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN cm.pi
+                ELSE 0
+              END)
+      END AS mtd_pi,
 
       /* PRIMARY */
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
@@ -131,11 +178,57 @@ SUM(
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS primary_installs,
 
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-          BETWEEN ? AND ? THEN cm.rti ELSE 0 END) AS primary_rti,
+      CASE
+        WHEN
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN IFNULL(cm.rti, 0)
+                ELSE 0
+              END) = 0
+          AND
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                    AND cm.rti IS NULL
+                THEN 1
+                ELSE 0
+              END) > 0
+        THEN NULL
+        ELSE
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN cm.rti
+                ELSE 0
+              END)
+      END AS primary_rti,
 
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-          BETWEEN ? AND ? THEN cm.pi ELSE 0 END) AS primary_pi,
+      CASE
+        WHEN
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN IFNULL(cm.pi, 0)
+                ELSE 0
+              END) = 0
+          AND
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                    AND cm.pi IS NULL
+                THEN 1
+                ELSE 0
+              END) > 0
+        THEN NULL
+        ELSE
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN cm.pi
+                ELSE 0
+              END)
+      END AS primary_pi,
 
       /* SECONDARY */
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
@@ -150,16 +243,66 @@ SUM(
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS secondary_installs,
 
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-          BETWEEN ? AND ? THEN cm.rti ELSE 0 END) AS secondary_rti,
+      CASE
+        WHEN
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN IFNULL(cm.rti, 0)
+                ELSE 0
+              END) = 0
+          AND
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                    AND cm.rti IS NULL
+                THEN 1
+                ELSE 0
+              END) > 0
+        THEN NULL
+        ELSE
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN cm.rti
+                ELSE 0
+              END)
+      END AS secondary_rti,
 
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-          BETWEEN ? AND ? THEN cm.pi ELSE 0 END) AS secondary_pi
+      CASE
+        WHEN
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN IFNULL(cm.pi, 0)
+                ELSE 0
+              END) = 0
+          AND
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                    AND cm.pi IS NULL
+                THEN 1
+                ELSE 0
+              END) > 0
+        THEN NULL
+        ELSE
+          SUM(CASE
+                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                    BETWEEN ? AND ?
+                THEN cm.pi
+                ELSE 0
+              END)
+      END AS secondary_pi
 
     FROM campaign_metrics_new cm
 
     WHERE LOWER(cm.campaign_name) = LOWER(?)
       AND LOWER(cm.os) = LOWER(?)
+      AND (
+        DATE(cm.shared_date) BETWEEN ? AND ?
+        OR DATE(cm.metrics_date) BETWEEN ? AND ?
+      )
       AND (
         cm.campaign_id IN (${campaignPlaceholders})
         OR (
@@ -176,51 +319,39 @@ SUM(
     GROUP BY cm.pubam, cm.pubid, cm.pid, cm.os,cm.campaign_id
   `;
 
+  const addRange = (range, pairs) =>
+    Array.from({ length: pairs }).flatMap(() => [range.start, range.end]);
+
   const params = [
-    // Impressions date range
+    // total_impressions
     mtd.start,
     mtd.end,
-    // MTD
-    mtd.start,
-    mtd.end,
-    mtd.start,
-    mtd.end,
-    mtd.start,
-    mtd.end,
-    mtd.start,
-    mtd.end,
-    mtd.start,
-    mtd.end,
-    // PRIMARY
-    primary.start,
-    primary.end,
-    primary.start,
-    primary.end,
-    primary.start,
-    primary.end,
-    primary.start,
-    primary.end,
-    primary.start,
-    primary.end,
-    // SECONDARY
-    secondary.start,
-    secondary.end,
-    secondary.start,
-    secondary.end,
-    secondary.start,
-    secondary.end,
-    secondary.start,
-    secondary.end,
-    secondary.start,
-    secondary.end,
+
+    // MTD (9 pairs)
+    ...addRange(mtd, 9),
+
+    // PRIMARY (9 pairs)
+    ...addRange(primary, 9),
+
+    // SECONDARY (9 pairs)
+    ...addRange(secondary, 9),
+
     // WHERE
     campaignName,
     os,
-
+    mtd.start,
+    mtd.end,
+    mtd.start,
+    mtd.end,
     ...campaign_ids,
     ...geo,
   ];
-
+  console.log({
+    placeholderCount: (sql.match(/\?/g) || []).length,
+    paramCount: params.length,
+    campaignIds: campaign_ids.length,
+    geo: geo.length,
+  });
   const [rows] = await db.execute(sql, params);
   return rows;
 }
@@ -253,17 +384,105 @@ async function fetchEventMetricsAllWindows(
     SELECT
      cm.campaign_id,
       cm.pid,
+      cm.pubid,
       cem.event_name,
       cem.event_type,
 
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-          BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS mtd_count,
+    CASE
+      WHEN
+        SUM(
+          CASE
+            WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                BETWEEN ? AND ?
+            THEN IFNULL(cem.count, 0)
+            ELSE 0
+          END
+        ) = 0
+        AND
+        SUM(
+          CASE
+            WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                BETWEEN ? AND ?
+                AND (cem.count IS NULL OR cem.count = 0)
+            THEN 1
+            ELSE 0
+          END
+        ) > 0
+      THEN NULL
+      ELSE
+        SUM(
+          CASE
+            WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                BETWEEN ? AND ?
+            THEN cem.count
+            ELSE 0
+          END
+        )
+    END AS mtd_count,
 
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-          BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS primary_count,
+    CASE
+      WHEN
+        SUM(
+          CASE
+            WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                BETWEEN ? AND ?
+            THEN IFNULL(cem.count, 0)
+            ELSE 0
+          END
+        ) = 0
+        AND
+        SUM(
+          CASE
+            WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                BETWEEN ? AND ?
+                AND (cem.count IS NULL OR cem.count = 0)
+            THEN 1
+            ELSE 0
+          END
+        ) > 0
+      THEN NULL
+      ELSE
+        SUM(
+          CASE
+            WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                BETWEEN ? AND ?
+            THEN cem.count
+            ELSE 0
+          END
+        )
+    END AS primary_count,
 
-      SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-          BETWEEN ? AND ? THEN cem.count ELSE 0 END) AS secondary_count
+    CASE
+      WHEN
+        SUM(
+          CASE
+            WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                BETWEEN ? AND ?
+            THEN IFNULL(cem.count, 0)
+            ELSE 0
+          END
+        ) = 0
+        AND
+        SUM(
+          CASE
+            WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                BETWEEN ? AND ?
+                AND (cem.count IS NULL OR cem.count = 0)
+            THEN 1
+            ELSE 0
+          END
+        ) > 0
+      THEN NULL
+      ELSE
+        SUM(
+          CASE
+            WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
+                BETWEEN ? AND ?
+            THEN cem.count
+            ELSE 0
+          END
+        )
+    END AS secondary_count
 
     FROM campaign_event_metrics_new cem
     INNER JOIN campaign_metrics_new cm
@@ -286,20 +505,36 @@ async function fetchEventMetricsAllWindows(
 
       AND cem.event_name IN (${evPlaceholders})
 
-    GROUP BY cm.campaign_id, cm.pid, cm.os, cem.event_name, cem.event_type
+    GROUP BY cm.campaign_id,cm.pubid, cm.pid, cm.os, cem.event_name, cem.event_type
   `;
 
   const params = [
+    // MTD
     mtd.start,
     mtd.end,
+    mtd.start,
+    mtd.end,
+    mtd.start,
+    mtd.end,
+
+    // PRIMARY
     primary.start,
     primary.end,
+    primary.start,
+    primary.end,
+    primary.start,
+    primary.end,
+
+    // SECONDARY
+    secondary.start,
+    secondary.end,
+    secondary.start,
+    secondary.end,
     secondary.start,
     secondary.end,
 
     campaignName,
     os,
-
     ...campaign_ids,
     ...geo,
 
@@ -399,11 +634,11 @@ async function getCampaignAnalytics(payload) {
     // Build aggregation objects per window
     const buildAgg = (prefix) => {
       const agg = {
-        clicks: row[`${prefix}_clicks`] || 0,
-        impressions: row[`${prefix}_impressions`] || 0,
-        installs: row[`${prefix}_installs`] || 0,
-        rti: row[`${prefix}_rti`] || 0,
-        pi: row[`${prefix}_pi`] || 0,
+        clicks: row[`${prefix}_clicks`],
+        impressions: row[`${prefix}_impressions`],
+        installs: row[`${prefix}_installs`],
+        rti: row[`${prefix}_rti`],
+        pi: row[`${prefix}_pi`],
         events: buildEventAgg(eventMap, eventMap_db[pidKey], prefix),
       };
 
@@ -470,6 +705,7 @@ async function getCampaignAnalytics(payload) {
       pid,
       pubid: row.pubid,
       pubam: row.pubam,
+      shared_date: row.shared_date,
       is_paused: row.is_paused,
       pid_color: pidColor,
       total_impressions: row.total_impressions || 0,
@@ -576,6 +812,7 @@ function flattenRow({
   pid,
   pubid,
   pubam,
+  shared_date,
   pid_color,
   total_impressions,
   mtd,
@@ -592,14 +829,20 @@ function flattenRow({
     pubam,
     is_paused,
     pid_color,
+    shared_date,
   };
   row.impressions = Number(total_impressions) || 0;
   // safely extract numeric value
   const getValue = (val) => {
-    if (typeof val === "object" && val !== null && "value" in val) {
-      return Number(val.value) || 0;
+    if (val === null || val === undefined || val === "N/A") {
+      return "N/A";
     }
-    return Number(val) || 0;
+
+    if (typeof val === "object" && "value" in val) {
+      return val.value === "N/A" ? "N/A" : Number(val.value);
+    }
+
+    return Number(val);
   };
 
   const formatMetric = (count, total) => {
@@ -619,17 +862,38 @@ function flattenRow({
     const paCount = getValue(data.pi);
     const fraudCount = rtiCount + paCount;
 
-    row[`rt_install_${suffix}`] = `${rtiCount} (${rtiPercent}%)`;
+    // RT Install
+    if (rtiCount === "N/A" || rtiPercent === "N/A") {
+      row[`rt_install_${suffix}`] = "N/A";
+      row[`rt_install_${suffix}_color`] = "N/A";
+    } else {
+      row[`rt_install_${suffix}`] = `${rtiCount} (${rtiPercent}%)`;
+      row[`rt_install_${suffix}_color`] = data.rt_install?.color || "green";
+    }
 
-    row[`rt_install_${suffix}_color`] = data.rt_install?.color || "green";
+    // PA Install
+    if (paCount === "N/A" || paPercent === "N/A") {
+      row[`pa_install_${suffix}`] = "N/A";
+      row[`pa_install_${suffix}_color`] = "N/A";
+    } else {
+      row[`pa_install_${suffix}`] = `${paCount} (${paPercent}%)`;
+      row[`pa_install_${suffix}_color`] = data.pa_install?.color || "green";
+    }
 
-    row[`pa_install_${suffix}`] = `${paCount} (${paPercent}%)`;
-
-    row[`pa_install_${suffix}_color`] = data.pa_install?.color || "green";
-
-    row[`install_fraud_${suffix}`] = `${fraudCount} (${fraudPercent}%)`;
-
-    row[`install_fraud_${suffix}_color`] = data.install_fraud?.color || "green";
+    // Install Fraud
+    if (
+      fraudCount === "N/A" ||
+      fraudPercent === "N/A" ||
+      rtiCount === "N/A" ||
+      paCount === "N/A"
+    ) {
+      row[`install_fraud_${suffix}`] = "N/A";
+      row[`install_fraud_${suffix}_color`] = "N/A";
+    } else {
+      row[`install_fraud_${suffix}`] = `${fraudCount} (${fraudPercent}%)`;
+      row[`install_fraud_${suffix}_color`] =
+        data.install_fraud?.color || "green";
+    }
 
     const installPercent =
       clicks > 0 ? ((installs / clicks) * 100).toFixed(2) : "0.00";

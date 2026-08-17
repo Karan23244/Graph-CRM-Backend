@@ -1070,17 +1070,42 @@ const handleUpload = async (req, res) => {
           allDates.add(startDate); // fallback if shared_date is null
         }
       }
-
+      const hasNoiFile = uploadedMetricNames.has("noi");
+      const hasRtiFile = uploadedMetricNames.has("rti");
+      const hasPeFile = uploadedMetricNames.has("pe");
+      const hasPiFile = uploadedMetricNames.has("pi");
+      const hasNoeFile = uploadedMetricNames.has("noe");
+      const hasClicksFile = uploadedMetricNames.has("clicks");
       // loop through all dates for this pid
       for (const date of allDates) {
         const metrics = {
-          noi: metricCounts.noi.get(pidLower)?.get(date) || 0,
-          rti: metricCounts.rti.get(pidLower)?.get(date) || 0,
-          pe: metricCounts.pe.get(pidLower)?.get(date) || 0,
-          pi: metricCounts.pi.get(pidLower)?.get(date) || 0,
-          noe: metricCounts.noe.get(pidLower)?.get(date) || 0,
-          clicks: metricCounts.clicks.get(pidLower)?.get(date) || 0,
-          impressions: metricCounts.impressions.get(pidLower)?.get(date) || 0,
+          noi: hasNoiFile
+            ? (metricCounts.noi.get(pidLower)?.get(date) ?? 0)
+            : null,
+
+          rti: hasRtiFile
+            ? (metricCounts.rti.get(pidLower)?.get(date) ?? 0)
+            : null,
+
+          pe: hasPeFile
+            ? (metricCounts.pe.get(pidLower)?.get(date) ?? 0)
+            : null,
+
+          pi: hasPiFile
+            ? (metricCounts.pi.get(pidLower)?.get(date) ?? 0)
+            : null,
+
+          noe: hasNoeFile
+            ? (metricCounts.noe.get(pidLower)?.get(date) ?? 0)
+            : null,
+
+          clicks: hasClicksFile
+            ? (metricCounts.clicks.get(pidLower)?.get(date) ?? 0)
+            : null,
+
+          impressions: hasClicksFile
+            ? (metricCounts.impressions.get(pidLower)?.get(date) ?? 0)
+            : null,
         };
 
         metricsData.push([

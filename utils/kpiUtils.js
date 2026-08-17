@@ -5,14 +5,25 @@ const PROVIDERS = require("./providerDefinitions");
  * Returns 0 if denominator is 0 or null.
  */
 function pct(numerator, denominator) {
-  if (!denominator || denominator === 0) return 0;
-  return parseFloat(((numerator / denominator) * 100).toFixed(2));
+  if (numerator === null || denominator === null) {
+    return "N/A";
+  }
+
+  if (denominator === 0) {
+    return 0;
+  }
+
+  return Number(((numerator / denominator) * 100).toFixed(2));
 }
 /**
  * Safe integer fallback
  */
 function int(val) {
-  return parseInt(val) || 0;
+  if (val === null || val === undefined) return null;
+
+  const num = parseInt(val, 10);
+
+  return Number.isNaN(num) ? 0 : num;
 }
 
 /**
@@ -24,20 +35,11 @@ function int(val) {
  */
 function computeKPIs(agg, eventKeys, provider = "appsflyer") {
   const clicks = int(agg.clicks);
-  const installs = int(agg.installs); // noi
+  const installs = int(agg.installs);
   const rti = int(agg.rti);
   const pi = int(agg.pi);
   const impressions = int(agg.impressions);
-  // const kpis = {
-  //   clicks,
-  //   installs,
-  //   rti,
-  //   pi,
-  //   c2i: pct(installs, clicks), // Clicks-to-Install %
-  //   rt_install: pct(rti, installs), // RT Install %
-  //   pa_install: pct(pi, installs), // PA Install %
-  //   install_fraud: pct(rti + pi, installs), // Total Install Fraud %
-  // };
+
   const c2iDenominator =
     clicks > 0 ? clicks : impressions > 0 ? impressions : 0;
 
@@ -50,26 +52,32 @@ function computeKPIs(agg, eventKeys, provider = "appsflyer") {
   };
 
   if (PROVIDERS[provider]?.supportsFraud) {
-    kpis.rt_install = pct(rti, installs);
+    kpis.rt_install =
+      installs === null || rti === null ? "N/A" : pct(rti, installs);
 
-    kpis.pa_install = pct(pi, installs);
+    kpis.pa_install =
+      installs === null || pi === null ? "N/A" : pct(pi, installs);
 
-    kpis.install_fraud = pct(rti + pi, installs);
+    kpis.install_fraud =
+      installs === null || rti === null || pi === null
+        ? "N/A"
+        : pct(rti + pi, installs);
   }
   // Dynamic event KPIs
   for (const eKey of eventKeys) {
     const eData = agg.events?.[eKey] || { noe: 0, pe: 0 };
 
-    const noeVal = int(eData.noe); // E1 / E2
-    const peVal = int(eData.pe); // PAE1 / PAE2
+    const noeVal = int(eData.noe);
+    const peVal = int(eData.pe);
 
-    // use ONLY NOE count
     kpis[`${eKey}_count`] = noeVal;
 
-    kpis[`cr_${eKey}`] = pct(noeVal, installs);
+    kpis[`cr_${eKey}`] =
+      installs === null || noeVal === null ? "N/A" : pct(noeVal, installs);
 
     if (PROVIDERS[provider]?.supportsPaidEvents) {
-      kpis[`pa_${eKey}`] = pct(peVal, noeVal);
+      kpis[`pa_${eKey}`] =
+        noeVal === null || peVal === null ? "N/A" : pct(peVal, noeVal);
 
       kpis[`pae_${eKey}`] = peVal;
     }

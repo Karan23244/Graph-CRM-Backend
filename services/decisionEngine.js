@@ -11,7 +11,20 @@ const METRIC_MAP = require("./decisionEngine.metricMap");
 // CONSTANTS
 // ─────────────────────────────────────────────
 const COLOR_TO_GRADE = { green: "A", yellow: "B", orange: "C", red: "D" };
+const IGNORE_METRIC_MAP = {
+  c2i: "c2i",
+  cti: "c2i",
 
+  "install fraud": "fraud",
+  "total install fraud": "fraud",
+  fraud: "fraud",
+
+  ite2: "i2e2",
+  i2e2: "i2e2",
+
+  "pa e2": "pa_e2",
+  pa_e2: "pa_e2",
+};
 // Grading source map — which param block + key each metric uses
 const GRADING_SOURCE = {
   c2i: { block: "rule1", key: "CTI" },
@@ -73,11 +86,15 @@ function gradeMetrics(
   providerName,
 ) {
   const provider = METRIC_MAP[providerName];
-
   return Object.fromEntries(
     provider.metrics.map(({ metric, block, key }) => {
-      const ignored = ignoreList.includes(metric);
-
+      const normalizedIgnoreList = ignoreList.map((m) => m.toLowerCase());
+      const ignoreSet = new Set(
+        ignoreList
+          .map((m) => IGNORE_METRIC_MAP[m.toLowerCase().trim()])
+          .filter(Boolean),
+      );
+      const ignored = ignoreSet.has(metric);
       const value = metricValues[metric];
 
       const config = block === "rule1" ? rule1Params[key] : rule2Params[key];
@@ -86,7 +103,7 @@ function gradeMetrics(
         metric,
         {
           value,
-          grade: ignored ? null : getGrade(value, config),
+          grade: ignored ? "A" : getGrade(value, config),
           ignored,
         },
       ];
@@ -235,13 +252,11 @@ function applyFraudRule(gradedMetrics, providerName) {
  */
 function applyDecisionMatrix(gradedMetrics, provider) {
   const providerConfig = METRIC_MAP[provider];
-
   const key = providerConfig.metrics
     .map(({ metric }) => gradedMetrics[metric].grade)
     .join("|");
 
   const matrix = getDecisionMatrix(provider);
-
 
   return matrix[key] ?? "Stable";
 }

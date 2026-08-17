@@ -81,7 +81,7 @@ exports.getPidHistory = async (req, res) => {
 
       WHERE pid=?
       AND STR_TO_DATE(metrics_date,'%Y-%m-%d')
-      BETWEEN DATE_SUB(CURDATE(),INTERVAL 30 DAY)
+      BETWEEN DATE_SUB(CURDATE(),INTERVAL 60 DAY)
       AND CURDATE()
       `,
       [pid, pid],
@@ -120,7 +120,7 @@ exports.getPidHistory = async (req, res) => {
 
   WHERE pid=?
   AND STR_TO_DATE(metrics_date,'%Y-%m-%d')
-      BETWEEN DATE_SUB(CURDATE(),INTERVAL 30 DAY)
+      BETWEEN DATE_SUB(CURDATE(),INTERVAL 60 DAY)
       AND CURDATE()
 
   GROUP BY
