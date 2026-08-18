@@ -141,8 +141,18 @@ exports.getPublisherBillingData = async (req, res) => {
 
   try {
     const [year, mon] = month.split("-");
+
     const startDate = `${year}-${mon}-01`;
-    const endDate = new Date(year, Number(mon), 0).toISOString().slice(0, 10);
+
+    const lastDay = new Date(Number(year), Number(mon), 0).getDate();
+
+    const endDate = `${year}-${mon}-${String(lastDay).padStart(2, "0")}`;
+
+    console.log("Billing date range:", {
+      month,
+      startDate,
+      endDate,
+    });
 
     /* =====================================================
        ORIGINAL QUERY
