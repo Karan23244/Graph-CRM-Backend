@@ -19,7 +19,7 @@ function pct(numerator, denominator) {
  * Safe integer fallback
  */
 function int(val) {
-  if (val === null || val === undefined) return null;
+  if (val === null) return null;
 
   const num = parseInt(val, 10);
 

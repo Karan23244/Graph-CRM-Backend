@@ -179,55 +179,67 @@ SUM(
           BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS primary_installs,
 
       CASE
-        WHEN
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                THEN IFNULL(cm.rti, 0)
-                ELSE 0
-              END) = 0
-          AND
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                    AND cm.rti IS NULL
-                THEN 1
-                ELSE 0
-              END) > 0
+        WHEN COUNT(
+          CASE
+            WHEN DATE(
+              COALESCE(
+                cm.install_time,
+                cm.event_time,
+                cm.clicks_date,
+                cm.metrics_date
+              )
+            ) BETWEEN ? AND ?
+            THEN cm.rti
+          END
+        ) = 0
         THEN NULL
-        ELSE
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                THEN cm.rti
-                ELSE 0
-              END)
+
+        ELSE SUM(
+          CASE
+            WHEN DATE(
+              COALESCE(
+                cm.install_time,
+                cm.event_time,
+                cm.clicks_date,
+                cm.metrics_date
+              )
+            ) BETWEEN ? AND ?
+            THEN cm.rti
+            ELSE 0
+          END
+        )
       END AS primary_rti,
 
       CASE
-        WHEN
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                THEN IFNULL(cm.pi, 0)
-                ELSE 0
-              END) = 0
-          AND
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                    AND cm.pi IS NULL
-                THEN 1
-                ELSE 0
-              END) > 0
+        WHEN COUNT(
+          CASE
+            WHEN DATE(
+              COALESCE(
+                cm.install_time,
+                cm.event_time,
+                cm.clicks_date,
+                cm.metrics_date
+              )
+            ) BETWEEN ? AND ?
+            THEN cm.pi
+          END
+        ) = 0
         THEN NULL
-        ELSE
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                THEN cm.pi
-                ELSE 0
-              END)
+
+        ELSE SUM(
+          CASE
+            WHEN DATE(
+              COALESCE(
+                cm.install_time,
+                cm.event_time,
+                cm.clicks_date,
+                cm.metrics_date
+              )
+            ) BETWEEN ? AND ?
+            THEN cm.pi
+            ELSE 0
+          END
+        )
       END AS primary_pi,
 
       /* SECONDARY */
@@ -243,56 +255,67 @@ SUM(
       SUM(CASE WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
           BETWEEN ? AND ? THEN cm.noi ELSE 0 END) AS secondary_installs,
 
-      CASE
-        WHEN
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                THEN IFNULL(cm.rti, 0)
-                ELSE 0
-              END) = 0
-          AND
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                    AND cm.rti IS NULL
-                THEN 1
-                ELSE 0
-              END) > 0
-        THEN NULL
-        ELSE
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                THEN cm.rti
-                ELSE 0
-              END)
-      END AS secondary_rti,
+CASE
+  WHEN COUNT(
+    CASE
+      WHEN DATE(
+        COALESCE(
+          cm.install_time,
+          cm.event_time,
+          cm.clicks_date,
+          cm.metrics_date
+        )
+      ) BETWEEN ? AND ?
+      THEN cm.rti
+    END
+  ) = 0
+  THEN NULL
 
+  ELSE SUM(
+    CASE
+      WHEN DATE(
+        COALESCE(
+          cm.install_time,
+          cm.event_time,
+          cm.clicks_date,
+          cm.metrics_date
+        )
+      ) BETWEEN ? AND ?
+      THEN cm.rti
+      ELSE 0
+    END
+  )
+END AS secondary_rti,
       CASE
-        WHEN
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                THEN IFNULL(cm.pi, 0)
-                ELSE 0
-              END) = 0
-          AND
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                    AND cm.pi IS NULL
-                THEN 1
-                ELSE 0
-              END) > 0
+        WHEN COUNT(
+          CASE
+            WHEN DATE(
+              COALESCE(
+                cm.install_time,
+                cm.event_time,
+                cm.clicks_date,
+                cm.metrics_date
+              )
+            ) BETWEEN ? AND ?
+            THEN cm.pi
+          END
+        ) = 0
         THEN NULL
-        ELSE
-          SUM(CASE
-                WHEN DATE(COALESCE(cm.install_time, cm.event_time, cm.clicks_date, cm.metrics_date))
-                    BETWEEN ? AND ?
-                THEN cm.pi
-                ELSE 0
-              END)
+
+        ELSE SUM(
+          CASE
+            WHEN DATE(
+              COALESCE(
+                cm.install_time,
+                cm.event_time,
+                cm.clicks_date,
+                cm.metrics_date
+              )
+            ) BETWEEN ? AND ?
+            THEN cm.pi
+            ELSE 0
+          END
+        )
       END AS secondary_pi
 
     FROM campaign_metrics_new cm
@@ -331,10 +354,10 @@ SUM(
     ...addRange(mtd, 9),
 
     // PRIMARY (9 pairs)
-    ...addRange(primary, 9),
+    ...addRange(primary, 7),
 
     // SECONDARY (9 pairs)
-    ...addRange(secondary, 9),
+    ...addRange(secondary, 7),
 
     // WHERE
     campaignName,
@@ -633,22 +656,43 @@ async function getCampaignAnalytics(payload) {
 
     // Build aggregation objects per window
     const buildAgg = (prefix) => {
-      const agg = {
-        clicks: row[`${prefix}_clicks`],
-        impressions: row[`${prefix}_impressions`],
-        installs: row[`${prefix}_installs`],
-        rti: row[`${prefix}_rti`],
-        pi: row[`${prefix}_pi`],
+      return {
+        clicks: row[`${prefix}_clicks`] ?? null,
+        impressions: row[`${prefix}_impressions`] ?? null,
+        installs: row[`${prefix}_installs`] ?? null,
+        rti: row[`${prefix}_rti`] ?? null,
+        pi: row[`${prefix}_pi`] ?? null,
         events: buildEventAgg(eventMap, eventMap_db[pidKey], prefix),
       };
-
-      return agg;
     };
 
     const aggMtd = buildAgg("mtd");
     const aggPrimary = buildAgg("primary");
     const aggSecondary = buildAgg("secondary");
 
+    // If MTD has data, but Primary/Secondary has no data,
+    // return 0 instead of null.
+    //
+    // If MTD itself is null, keep Primary/Secondary null.
+    if (aggMtd.rti !== null) {
+      if (aggPrimary.rti === null) {
+        aggPrimary.rti = 0;
+      }
+
+      if (aggSecondary.rti === null) {
+        aggSecondary.rti = 0;
+      }
+    }
+
+    if (aggMtd.pi !== null) {
+      if (aggPrimary.pi === null) {
+        aggPrimary.pi = 0;
+      }
+
+      if (aggSecondary.pi === null) {
+        aggSecondary.pi = 0;
+      }
+    }
     // KPI computation
     const kpiMtd = computeKPIs(aggMtd, eventKeys, config.config_type);
     const kpiPrimary = computeKPIs(aggPrimary, eventKeys, config.config_type);
@@ -834,15 +878,29 @@ function flattenRow({
   row.impressions = Number(total_impressions) || 0;
   // safely extract numeric value
   const getValue = (val) => {
-    if (val === null || val === undefined || val === "N/A") {
-      return "N/A";
+    if (val === null || val === undefined) {
+      return null;
+    }
+
+    if (val === "N/A") {
+      return null;
     }
 
     if (typeof val === "object" && "value" in val) {
-      return val.value === "N/A" ? "N/A" : Number(val.value);
+      if (
+        val.value === null ||
+        val.value === undefined ||
+        val.value === "N/A"
+      ) {
+        return null;
+      }
+
+      return Number(val.value);
     }
 
-    return Number(val);
+    const num = Number(val);
+
+    return Number.isNaN(num) ? null : num;
   };
 
   const formatMetric = (count, total) => {
@@ -860,37 +918,42 @@ function flattenRow({
 
     const rtiCount = getValue(data.rti);
     const paCount = getValue(data.pi);
-    const fraudCount = rtiCount + paCount;
+
+    const fraudCount =
+      rtiCount === null || paCount === null ? null : rtiCount + paCount;
 
     // RT Install
-    if (rtiCount === "N/A" || rtiPercent === "N/A") {
+    if (rtiCount === null || rtiPercent === null) {
       row[`rt_install_${suffix}`] = "N/A";
       row[`rt_install_${suffix}_color`] = "N/A";
     } else {
       row[`rt_install_${suffix}`] = `${rtiCount} (${rtiPercent}%)`;
+
       row[`rt_install_${suffix}_color`] = data.rt_install?.color || "green";
     }
 
     // PA Install
-    if (paCount === "N/A" || paPercent === "N/A") {
+    if (paCount === null || paPercent === null) {
       row[`pa_install_${suffix}`] = "N/A";
       row[`pa_install_${suffix}_color`] = "N/A";
     } else {
       row[`pa_install_${suffix}`] = `${paCount} (${paPercent}%)`;
+
       row[`pa_install_${suffix}_color`] = data.pa_install?.color || "green";
     }
 
     // Install Fraud
     if (
-      fraudCount === "N/A" ||
-      fraudPercent === "N/A" ||
-      rtiCount === "N/A" ||
-      paCount === "N/A"
+      fraudCount === null ||
+      fraudPercent === null ||
+      rtiCount === null ||
+      paCount === null
     ) {
       row[`install_fraud_${suffix}`] = "N/A";
       row[`install_fraud_${suffix}_color`] = "N/A";
     } else {
       row[`install_fraud_${suffix}`] = `${fraudCount} (${fraudPercent}%)`;
+
       row[`install_fraud_${suffix}_color`] =
         data.install_fraud?.color || "green";
     }

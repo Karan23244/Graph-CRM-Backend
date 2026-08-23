@@ -1079,9 +1079,13 @@ const handleUpload = async (req, res) => {
       // loop through all dates for this pid
       for (const date of allDates) {
         const metrics = {
+          // NOI:
+          // Dedicated installs file OR clicks-file fallback
           noi: hasNoiFile
             ? (metricCounts.noi.get(pidLower)?.get(date) ?? 0)
-            : null,
+            : metricCounts.noi.get(pidLower)?.has(date)
+              ? metricCounts.noi.get(pidLower).get(date)
+              : null,
 
           rti: hasRtiFile
             ? (metricCounts.rti.get(pidLower)?.get(date) ?? 0)
@@ -1095,14 +1099,24 @@ const handleUpload = async (req, res) => {
             ? (metricCounts.pi.get(pidLower)?.get(date) ?? 0)
             : null,
 
+          // NOE:
+          // Dedicated NOE file OR clicks-file event fallback
           noe: hasNoeFile
             ? (metricCounts.noe.get(pidLower)?.get(date) ?? 0)
-            : null,
+            : metricCounts.noe.get(pidLower)?.has(date)
+              ? metricCounts.noe.get(pidLower).get(date)
+              : null,
 
+          // Clicks:
+          // If clicks file exists, missing value = 0
+          // If clicks file doesn't exist = NULL
           clicks: hasClicksFile
             ? (metricCounts.clicks.get(pidLower)?.get(date) ?? 0)
             : null,
 
+          // Impressions:
+          // If clicks file exists, missing value = 0
+          // If clicks file doesn't exist = NULL
           impressions: hasClicksFile
             ? (metricCounts.impressions.get(pidLower)?.get(date) ?? 0)
             : null,
