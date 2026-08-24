@@ -745,18 +745,19 @@ const handleUpload = async (req, res) => {
             }
           }
           // ---- Fallback NOE from Clicks File Dynamic Event Columns ----
+          // ---- Fallback NOE from Clicks File Dynamic Event Columns ----
           if (!uploadedMetricNames.has("noe")) {
             const PREFIX = "uniqueusersltvdayscumulativeappsflyer";
 
             let totalNoe = 0;
+            let hasEventColumn = false;
 
             normHeaders.forEach((normHeader, idx) => {
-              // Match columns starting with:
-              // uniqueusersltvdayscumulativeappsflyer
+              // Match event columns
               if (normHeader.startsWith(PREFIX)) {
                 const originalKey = headers[idx];
 
-                // Extract event name after prefix
+                // Extract event name
                 let extractedEvent = normHeader.replace(PREFIX, "");
 
                 extractedEvent = extractedEvent
@@ -764,10 +765,13 @@ const handleUpload = async (req, res) => {
                   .trim()
                   .toLowerCase();
 
-                // skip if no event name
+                // Ignore prefix-only column
                 if (!extractedEvent) return;
 
-                // Match only allowed campaign config events
+                // Event column exists
+                hasEventColumn = true;
+
+                // Only process allowed campaign events
                 if (!allowedEvents.includes(extractedEvent)) {
                   return;
                 }
@@ -777,22 +781,23 @@ const handleUpload = async (req, res) => {
                     (row[originalKey] || "").toString().replace(/,/g, ""),
                   ) || 0;
 
-                if (val <= 0) return;
-
-                // Total NOE
+                // 0 is a valid value
                 totalNoe += val;
 
-                // Store event-wise NOE
-                incEventCount(pid, metricsDate, extractedEvent, "noe", val);
+                // Store event-wise NOE only when > 0
+                if (val > 0) {
+                  incEventCount(pid, metricsDate, extractedEvent, "noe", val);
 
-                console.log(
-                  `📊 [Fallback Clicks Event] PID=${pid}, date=${metricsDate}, event=${extractedEvent}, val=${val}`,
-                );
+                  console.log(
+                    `📊 [Fallback Clicks Event] PID=${pid}, date=${metricsDate}, event=${extractedEvent}, val=${val}`,
+                  );
+                }
               }
             });
 
-            // store overall NOE metric
-            if (totalNoe > 0) {
+            // Event columns exist in Clicks file:
+            // store NOE even when total is 0
+            if (hasEventColumn) {
               incIfPidDate(metricCounts.noe, pid, metricsDate, totalNoe);
 
               console.log(
@@ -1080,43 +1085,49 @@ const handleUpload = async (req, res) => {
       for (const date of allDates) {
         const metrics = {
           // NOI:
-          // Dedicated installs file OR clicks-file fallback
+          // If installs file exists → use installs file
+          // Otherwise, if clicks file exists → use clicks-file fallback
+          // Otherwise → NULL
           noi: hasNoiFile
             ? (metricCounts.noi.get(pidLower)?.get(date) ?? 0)
-            : metricCounts.noi.get(pidLower)?.has(date)
-              ? metricCounts.noi.get(pidLower).get(date)
+            : hasClicksFile
+              ? (metricCounts.noi.get(pidLower)?.get(date) ?? 0)
               : null,
 
+          // RTI:
+          // Only meaningful when RTI file was uploaded
           rti: hasRtiFile
             ? (metricCounts.rti.get(pidLower)?.get(date) ?? 0)
             : null,
 
+          // PE:
+          // Only meaningful when PE file was uploaded
           pe: hasPeFile
             ? (metricCounts.pe.get(pidLower)?.get(date) ?? 0)
             : null,
 
+          // PI:
+          // Only meaningful when PI file was uploaded
           pi: hasPiFile
             ? (metricCounts.pi.get(pidLower)?.get(date) ?? 0)
             : null,
 
           // NOE:
-          // Dedicated NOE file OR clicks-file event fallback
+          // If NOE file exists → use NOE file
+          // Otherwise, if clicks file exists → use clicks-file event fallback
+          // Otherwise → NULL
           noe: hasNoeFile
             ? (metricCounts.noe.get(pidLower)?.get(date) ?? 0)
-            : metricCounts.noe.get(pidLower)?.has(date)
-              ? metricCounts.noe.get(pidLower).get(date)
+            : hasClicksFile
+              ? (metricCounts.noe.get(pidLower)?.get(date) ?? 0)
               : null,
 
-          // Clicks:
-          // If clicks file exists, missing value = 0
-          // If clicks file doesn't exist = NULL
+          // Clicks
           clicks: hasClicksFile
             ? (metricCounts.clicks.get(pidLower)?.get(date) ?? 0)
             : null,
 
-          // Impressions:
-          // If clicks file exists, missing value = 0
-          // If clicks file doesn't exist = NULL
+          // Impressions
           impressions: hasClicksFile
             ? (metricCounts.impressions.get(pidLower)?.get(date) ?? 0)
             : null,
